@@ -23,8 +23,8 @@ program ptca_repulsive
   integer(8),parameter :: n_equil  = 2000 !! no of equilibrium steps
   integer(8),parameter :: n_meas  = 2000 !! no of measurements
   integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
-  integer(8),parameter :: dim_h = 2*n_sites  ! dimensionality of hamiltonian
-  integer(8),parameter :: dim_clsh = 2*cls_dim ! dimensionality of cluster hamiltonian
+  integer(8),parameter :: dim_h = 6*n_sites  ! dimensionality of hamiltonian
+  integer(8),parameter :: dim_clsh = 6*cls_dim ! dimensionality of cluster hamiltonian
   real(8),parameter :: temp = 0.30  !! simulation temperature
   real(8),parameter :: dtemp = 0.01 !! temperature step to lower the temperature
   real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
@@ -149,7 +149,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
             !print *,'before sweep',m(site_clster),my_id,site_clster
             !!  initialize cluster hamiltonian
             call cluster_ham(site_clster,L,n_sites,cls_sites, &
-                          hamil_cls,cls_dim,t_hopping,hamiltonian,dim_h,dim_clsh,cl_st)
+                          hamil_cls,cls_dim,t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
 
             !!  try to update the mc variables at the given site
             call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
@@ -268,7 +268,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
             !!    initialize cluster hamiltonian
             call cluster_ham(site_clster,L,n_sites,cls_sites, &
-                                hamil_cls,cls_dim,t_hopping,hamiltonian,dim_h,dim_clsh,cl_st)
+                                hamil_cls,cls_dim,t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
 
             !!     try to update the mc variables at the given site
             call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
@@ -594,9 +594,9 @@ end subroutine ham_init
 !!!!!!!!!!!!!!!!!!initializing the cluster hamiltonian!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine cluster_ham(site_clster,L,n_sites,cls_sites, hamil_cls,cls_dim,&
-                        t_hopping,hamiltonian,dim_h,dim_clsh,cl_st)
+                        t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
 implicit none
-  integer(8) :: cls_dim,L, cls_sites,n_sites
+  integer(8) :: cls_dim,L, cls_sites,n_sites,ns_unit
   integer(8) :: i,si,x,y,xip,yip
   integer :: sri,sui ! for the nn hopping
   integer(8) :: site_clster ! site that has the variable that will be changed
@@ -634,21 +634,37 @@ implicit none
       hamil_cls(si,si)=hamiltonian(cl_st(site_clster,si),cl_st(site_clster,si))
       hamil_cls(si+cls_dim,si+cls_dim)=hamiltonian(cl_st(site_clster,si)+n_sites,cl_st(site_clster,si)+n_sites)
 
-      !!! setting up the hopping part for spin up
-      hamil_cls(si,sri) = -t_hopping
-      hamil_cls(si,sui) = -t_hopping
+      !! 0--->1 & 0--->2 for spin up in the unit cell at si
+      hamil_cls(ns_unit*si,(ns_unit*si)+1) = -t_hopping
+      hamil_cls(ns_unit*si,(ns_unit*si)+2) = -t_hopping
+      
+      !! 1--->0 & 1---> 2 for spin up in the unit cell at si
+      hamil_cls((ns_unit*si)+1,(ns_unit*si)) = -t_hopping
+      hamil_cls((ns_unit*si)+1,(ns_unit*si)+2) = -t_hopping
 
-      !!! hopping part for the spin down
-      hamil_cls(si+cls_dim,sri+cls_dim) = -t_hopping
-      hamil_cls(si+cls_dim,sui+cls_dim) = -t_hopping
+      !! 2--->0 & 2---> 1 for spin up in the unit cell at si
+      hamil_cls((ns_unit*si)+2,(ns_unit*si)) = -t_hopping
+      hamil_cls((ns_unit*si)+2,(ns_unit*si)+1) = -t_hopping
+      
 
-      !!! setting up the conjugate hopping part for spin up
-      hamil_cls(sri,si) = -t_hopping
-      hamil_cls(sui,si) = -t_hopping
+      !! 0--->1 & 0--->2 for spin down in the unit cell at si
+      hamil_cls(ns_unit*si+cls_dim,(ns_unit*si)+1+cls_dim) = -t_hopping
+      hamil_cls(ns_unit*si+cls_dim,(ns_unit*si)+2+cls_dim) = -t_hopping
+      
+      !! 1--->0 & 1---> 2 for spin down in the unit cell at si
+      hamil_cls((ns_unit*si)+1+cls_dim,(ns_unit*si)+cls_dim) = -t_hopping
+      hamil_cls((ns_unit*si)+1+cls_dim,(ns_unit*si)+2+cls_dim) = -t_hopping
 
-      !!! conjugate hopping part for the spin down
-      hamil_cls(sri+cls_dim,si+cls_dim) = -t_hopping
-      hamil_cls(sui+cls_dim,si+cls_dim) = -t_hopping
+      !! 2--->0 & 2---> 1 for spin down in the unit cell at si
+      hamil_cls((ns_unit*si)+2+cls_dim,(ns_unit*si)+cls_dim) = -t_hopping
+      hamil_cls((ns_unit*si)+2+cls_dim,(ns_unit*si)+1+cls_dim) = -t_hopping
+
+
+
+
+
+
+      
       !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
     end do
     
