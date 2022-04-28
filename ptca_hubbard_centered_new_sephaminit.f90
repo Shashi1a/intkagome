@@ -12,6 +12,7 @@ program ptca_repulsive
   integer :: num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
+  integer(8),parameter :: ns_unit = 3
   integer(8),parameter :: L = 10 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
   integer(8),parameter :: cls_sites =  8 !! cluster size
@@ -41,16 +42,16 @@ program ptca_repulsive
 
   !!!!!!!!!!!!!!!!!! initialize neighbour table !!!!!!!!!!!!!!!!!!!!!
   integer(8),dimension(0:n_sites-1)::sites
-  integer(8),dimension(0:n_sites-1):: right,left,up,down
+  integer(8),dimension(0:n_sites-1):: right,left,up,down,right_up,left_down
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!! array that will hold all the sites in the cluster!!!
   integer(8), dimension(0:n_sites-1,0:cls_dim-1)::cl_st ! sites in the cluster at site j
   integer(8),dimension(0:n_splits-1,0:split_sites-1) :: sites_array !! array to store information about the split sites
 
   !!!!!!!!!!!!!!!!!! variational parameters of the monte carlo procedure !!!!!!!!
-  real(8),dimension(0:n_sites-1):: m,m_loc   !! m
-  real(8),dimension(0:n_sites-1):: theta,loc_theta !! theta
-  real(8),dimension(0:n_sites-1):: phi,loc_phi  !! phi
+  real(8),dimension(0:3,0:n_sites-1):: m,m_loc   !! m
+  real(8),dimension(0:3,0:n_sites-1):: theta,loc_theta !! theta
+  real(8),dimension(0:3,0:n_sites-1):: phi,loc_phi  !! phi
 
 !!!!!!!!!!!!!!! full hamiltonian and cluster hamiltonian !!!!!!!!!!!!
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
@@ -80,11 +81,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
    call MPI_COMM_RANK(MPI_COMM_WORLD,my_id,ierr)
 
     !! calling the subroutine to initialize the neighbours
-    call neighbour_table(right,left,up,down,L,n_sites,sites)
+    call neighbour_table(right,left,up,down,L,n_sites,sites,right_up,left_down)
    
     !! subroutinee to initialize the mc variables(m,theta,phi) at each site
     if (my_id == 0) then
-        call mcvar_init(n_sites,m,theta,phi,pi,m_min,m_max)
+        call mcvar_init(ns_unit,n_sites,m,theta,phi,pi,m_min,m_max)
     end if
     
     !! synchronize all the processes and broadcast m configuration
@@ -102,8 +103,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
     !! subroutine to initialize the full lattice hamiltonian (2L*L,2*L*L) by master
     
-    call ham_init(right,left,up,down,L,n_sites,hamiltonian,t_hopping,&
-                            mu,u_int,m,theta,phi,dim_h)
+    call ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
+                            mu,u_int,m,theta,phi,dim_h,ns_unit)
 
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -210,8 +211,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
         !! initializing the most updated hamiltonian using the updated
         !! monte carlo configurations of m,theta and phi
-        call ham_init(right,left,up,down,L,n_sites,hamiltonian,t_hopping,&
-                            mu,u_int,m,theta,phi,dim_h)
+        call ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
+                            mu,u_int,m,theta,phi,dim_h,ns_unit)
         
         !do loc_proc=0,10,1
         !print *,'ab',m(j*(split_sites-1):(j+1)*(split_sites-1)),my_id
@@ -382,12 +383,12 @@ end program ptca_repulsive
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!! setting up the neighbour table!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine neighbour_table(right,left,up,down,L,n_sites,sites)
+subroutine neighbour_table(right,left,up,down,L,n_sites,sites,right_up,left_down)
 implicit none
     integer(8) :: i,xi,yi,ri,li,ui,di
     integer(8) :: L
     integer(8) :: n_sites
-    integer(8),dimension(0:n_sites-1):: right,left,up,down
+    integer(8),dimension(0:n_sites-1):: right,left,up,down,right_up,left_down
     integer(8),dimension(0:n_sites-1)::sites
 
     !!! sites in the lattice starting from 0-->(n_sites-1)
@@ -406,6 +407,8 @@ implicit none
       left(i) = li + (yi * L)
       up(i) = xi + (ui * L)
       down(i) = xi + (di * L)
+      left_down(i) = li + (di*L)
+      right_up(i) = ri + (ui*L)
       !print *,i,right(i),left(i),up(i),down(i)
     end do
 
@@ -415,9 +418,9 @@ end subroutine neighbour_table
 !! ---------------------------------------------------------------------------!!
 !! -------------------- initialize monte carlo variables----------------------!!
 !! ---------------------------------------------------------------------------!!
-subroutine mcvar_init(n_sites,m,theta,phi,pi,m_min,m_max)
+subroutine mcvar_init(ns_unit,n_sites,m,theta,phi,pi,m_min,m_max)
 implicit none
-  integer(8) :: n_sites,i
+  integer(8) :: n_sites,i,ns_unit,j
   
   real(8) :: pi
   real(8) :: m_min,m_max
@@ -426,20 +429,21 @@ implicit none
   real(8),dimension(0:n_sites-1) :: m,theta,phi  
 
   do i = 0, n_sites-1, 1
+    do j=0,ns_unit,1
     call random_number(rand1)
     call random_number(rand2)
     call random_number(rand3)
 
     rand_int1=int(rand1*5000)
-    m(i)=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
+    m(j,i)=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
 
     rand_int2=int(rand2*1000)
-    theta(i)=acos(-1.0_8+(rand_int2/500.0))
+    theta(j,i)=acos(-1.0_8+(rand_int2/500.0))
 
     rand_int3=int(rand3*2000)
-    phi(i)=(2.0_8*pi)*(rand_int3/2000.0)
-    
-    !! this is the normal method that was used
+    phi(j,i)=(2.0_8*pi)*(rand_int3/2000.0)
+    end do
+
     
   end do
 end subroutine mcvar_init
@@ -448,57 +452,137 @@ end subroutine mcvar_init
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!initializing the hamiltonian!!!!1!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine ham_init(right,left,up,down,L,n_sites,hamiltonian,t_hopping,mu, &
-                      u_int,m,theta,phi,dim_h)
+subroutine ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,mu, &
+                      u_int,m,theta,phi,dim_h,ns_unit)
 implicit none
-  integer :: i
-  integer(8) :: L
+  integer :: i,id0,id1,id2
+  integer :: s0l,s0ld 
+  integer :: s1r,s1d
+  integer :: s2u,s2ur
+  integer(8) :: L,ns_unit
   integer(8) :: n_sites
-  integer(8) :: ri,li,ui,di
+  integer(8) :: ri,li,ui,di,rui,ldi
   integer(8) :: dim_h
   real(8) :: t_hopping,mu,u_int
-  integer(8),dimension(0:n_sites-1) :: right,left,up,down
+  integer(8),dimension(0:n_sites-1) :: right,left,up,down,right_up,left_down
 
   real(8) ::mx,my,mz
-  real(8),dimension(0:n_sites-1)::m,theta,phi
+  real(8),dimension(0:ns_unit,0:n_sites-1)::m,theta,phi
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   hamiltonian(:,:) = cmplx(0.0,0.0)
 
   do i = 0,n_sites-1, 1
-    ri = right(i)
-    li = left(i)
-    ui = up(i)
-    di = down(i)
+    id0 = (ns_unit*i) !! first site in the unit cell i
+    id1 = (ns_unit*i)+ 1 !! second site in the unit cell i
+    id2 = (ns_unit*i)+ 2  !! third site in the unit cell i
+ 
+    !!! hopping from site 0-->1 & 0--->2
+    hamiltonian(id0,id1) = -t_hopping
+    hamiltonian(id0,id2) = -t_hopping
+
+    ! conjugate hopping 1--->0 and hopping from 1--->2
+    hamiltonian(id1,id0) = -t_hopping
+    hamiltonian(id1,id2) = -t_hopping
 
 
-    mx = m(i)  * cos(phi(i)) * sin(theta(i))
-    my = m(i) * sin(phi(i)) * sin(theta(i))
-    mz = m(i) *  cos(theta(i))
-
-   ! normal hopping i-->j for up,up
-    hamiltonian(i,ri) = -t_hopping
-    hamiltonian(i,ui) = -t_hopping
-
-    ! conjugate hopping j-->i for up,up
-    hamiltonian(ri,i) = -t_hopping
-    hamiltonian(ui,i) = -t_hopping
+    ! conjugate hopping from 2-->0 and 2--->1
+     hamiltonian(id2,id0) = -t_hopping
+    hamiltonian(id2,id1) = -t_hopping
 
 
-    ! normal hopping i-->j for down,down
-    hamiltonian(i+n_sites,ri+n_sites) = -t_hopping
-    hamiltonian(i+n_sites,ui+n_sites) = -t_hopping
+    ! conjugate hopping 0--->1,0--->2 for down spin
+    hamiltonian(id0+n_sites,id1+n_sites) = -t_hopping
+    hamiltonian(id0+n_sites,id2+n_sites) = -t_hopping
 
-    ! conjugate hopping j-->i for down,down
-    hamiltonian(ri+n_sites,i+n_sites) = -t_hopping
-    hamiltonian(ui+n_sites,i+n_sites) = -t_hopping
+    ! conjugate hopping 1--->0, 1--->2 for down spin
+    hamiltonian(id1+n_sites,id0+n_sites) = -t_hopping
+    hamiltonian(id1+n_sites,id2+n_sites) = -t_hopping
 
-    ! chemical potential mu up,up and down,down and also the +-mz term
-    hamiltonian(i,i) = -(mu-0.5*u_int) - (0.5*u_int)*mz
-    hamiltonian(i+n_sites,i+n_sites) = -(mu-0.5*u_int) +  (0.5*u_int)*mz
+    ! conjugate hopping 2--->0,2--->1 for down spin
+    hamiltonian(id2+n_sites,id0+n_sites) = -t_hopping
+    hamiltonian(id2+n_sites,id1+n_sites) = -t_hopping
+  end do
 
-    ! setting the updn and dnup components
-    hamiltonian(i,i+n_sites) = -(0.5*u_int)*cmplx(mx,-my)
-    hamiltonian(i+n_sites,i) = -(0.5*u_int)*cmplx(mx,my)
+
+  do i = 0,n_sites-1, 1
+    !! sites in the unit cell
+    id0 = (ns_unit*i);id1 = (ns_unit*i)+1;id2 = (ns_unit*i)+2
+
+    !! neighbouring unit cell 
+    ri = right(i);li = left(i);ui = up(i);di = down(i);rui = right_up(i);ldi = left_down(i)
+
+    !! neighbour of site 0
+    s0l = (ns_unit*li) + 1 ; s0ld = (ns_unit*ldi)+2
+
+    !! neighbour of site 1
+    s1r = (ns_unit*ri) ; s1d = (ns_unit*di + 2)
+
+    !! neighbour of site 2
+    s2u = (ns_unit*ui) + 1; s2ur = (ns_unit*rui)
+
+
+    !! hopping between 0th site and site outside unit cell for up spin
+    hamiltonian(id0,s0l) = -t_hopping ; hamiltonian(s0l,id0) = -t_hopping
+    hamiltonian(id0,s0ld) = -t_hopping ; hamiltonian(s0ld,id0) = -t_hopping
+    
+    !! hopping between 1st site and site outside unit cell for up spin
+    hamiltonian(id1,s1r) = -t_hopping ; hamiltonian(s1r,id1) = -t_hopping
+    hamiltonian(id1,s1d) = -t_hopping ; hamiltonian(s1d,id1) = -t_hopping
+
+    !! hopping between 2nd site and site outside the unit cell for up spin
+    hamiltonian(id2,s2u) = -t_hopping ; hamiltonian(s2u,id2) = -t_hopping
+    hamiltonian(id2,s2ur) = -t_hopping ; hamiltonian(s2ur,id2) = -t_hopping
+
+
+    !! hopping between 0th site and site outside unit cell for down spin
+    hamiltonian(id0+n_sites,s0l+n_sites) = -t_hopping ; hamiltonian(s0l+n_sites,id0+n_sites) = -t_hopping
+    hamiltonian(id0+n_sites,s0ld+n_sites) = -t_hopping ; hamiltonian(s0ld+n_sites,id0+n_sites) = -t_hopping
+    
+    !! hopping between 1st site and site outside unit cell for down spin
+    hamiltonian(id1+n_sites,s1r+n_sites) = -t_hopping ; hamiltonian(s1r+n_sites,id1+n_sites) = -t_hopping
+    hamiltonian(id1+n_sites,s1d+n_sites) = -t_hopping ; hamiltonian(s1d+n_sites,id1+n_sites) = -t_hopping
+
+    !! hopping between 2nd site and site outside the unit cell for down spin
+    hamiltonian(id2+n_sites,s2u+n_sites) = -t_hopping ; hamiltonian(s2u+n_sites,id2+n_sites) = -t_hopping
+    hamiltonian(id2+n_sites,s2ur+n_sites) = -t_hopping ; hamiltonian(s2ur+n_sites,id2+n_sites) = -t_hopping
+
+
+    !!! mx for three sites in the unit cell
+    mx0 = m(0,i)  * cos(phi(0,i)) * sin(theta(0,i))
+    mx1 = m(1,i)  * cos(phi(1,i)) * sin(theta(1,i))
+    mx2 = m(2,i)  * cos(phi(2,i)) * sin(theta(2,i))
+
+    !!! my for three sites in the unit cell
+    my0 = m(0,i) * sin(phi(0,i)) * sin(theta(0,i))
+    my1 = m(1,i) * sin(phi(1,i)) * sin(theta(1,i))
+    my2 = m(2,i) * sin(phi(1,i)) * sin(theta(2,i))
+    
+    !! mz for three sites in the unit cell
+    mz0 = m(0,i) *  cos(theta(0,i));mz1 = m(1,i) *  cos(theta(1,i));mz2 = m(2,i) *  cos(theta(2,i))
+    
+    !! for up spins
+    hamiltonian(id0,id0) =  -(mu-0.5*u_int) - (0.5*u_int)*mz0
+    hamiltonian(id1,id1) =  -(mu-0.5*u_int) - (0.5*u_int)*mz1
+    hamiltonian(id2,id2) =  -(mu-0.5*u_int) - (0.5*u_int)*mz2
+
+    !! for down spins
+    hamiltonian(id0+n_sites,id0+n_sites) =  -(mu-0.5*u_int) + (0.5*u_int)*mz0
+    hamiltonian(id1+n_sites,id1+n_sites) =  -(mu-0.5*u_int) + (0.5*u_int)*mz1
+    hamiltonian(id2+n_sites,id2+n_sites) =  -(mu-0.5*u_int) + (0.5*u_int)*mz2
+
+    ! setting the updn and dnup components for site 0 in the unit cell
+    hamiltonian(id0,id0+n_sites) = -(0.5*u_int)*cmplx(mx0,-my0)
+    hamiltonian(id0+n_sites,id0) = -(0.5*u_int)*cmplx(mx0,my0)
+
+
+    ! setting the updn and dnup components for site 1 in the unit cell
+    hamiltonian(id1,id1+n_sites) = -(0.5*u_int)*cmplx(mx1,-my1)
+    hamiltonian(id1+n_sites,id1) = -(0.5*u_int)*cmplx(mx1,my1)
+
+    ! setting the updn and dnup components for site 2 in the unit cell
+    hamiltonian(id2,id2+n_sites) = -(0.5*u_int)*cmplx(mx2,-my2)
+    hamiltonian(id2+n_sites,id2) = -(0.5*u_int)*cmplx(mx2,my2)
+
   end do
   !print *,hamiltonian
 end subroutine ham_init
