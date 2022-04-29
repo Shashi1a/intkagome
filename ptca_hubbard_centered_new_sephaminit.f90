@@ -20,13 +20,13 @@ program ptca_repulsive
   integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
   integer(8),parameter :: split_sites = n_sites/n_splits
   integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
-  integer(8),parameter :: n_equil  = 2000 !! no of equilibrium steps
-  integer(8),parameter :: n_meas  = 2000 !! no of measurements
+  integer(8),parameter :: n_equil  = 0 !! no of equilibrium steps
+  integer(8),parameter :: n_meas  = 0 !! no of measurements
   integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
   integer(8),parameter :: dim_h = 6*n_sites  ! dimensionality of hamiltonian
   integer(8),parameter :: dim_clsh = 6*cls_dim ! dimensionality of cluster hamiltonian
   real(8),parameter :: temp = 0.30  !! simulation temperature
-  real(8),parameter :: dtemp = 0.01 !! temperature step to lower the temperature
+  real(8),parameter :: dtemp = 0.30 !! temperature step to lower the temperature
   real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
@@ -429,7 +429,7 @@ implicit none
   real(8),dimension(0:n_sites-1) :: m,theta,phi  
 
   do i = 0, n_sites-1, 1
-    do j=0,ns_unit,1
+    do j=0,ns_unit-1,1
     call random_number(rand1)
     call random_number(rand2)
     call random_number(rand3)
@@ -471,38 +471,7 @@ implicit none
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   hamiltonian(:,:) = cmplx(0.0,0.0)
 
-  do i = 0,n_sites-1, 1
-    id0 = (ns_unit*i) !! first site in the unit cell i
-    id1 = (ns_unit*i)+ 1 !! second site in the unit cell i
-    id2 = (ns_unit*i)+ 2  !! third site in the unit cell i
- 
-    !!! hopping from site 0-->1 & 0--->2
-    hamiltonian(id0,id1) = -t_hopping
-    hamiltonian(id0,id2) = -t_hopping
-
-    ! conjugate hopping 1--->0 and hopping from 1--->2
-    hamiltonian(id1,id0) = -t_hopping
-    hamiltonian(id1,id2) = -t_hopping
-
-
-    ! conjugate hopping from 2-->0 and 2--->1
-     hamiltonian(id2,id0) = -t_hopping
-    hamiltonian(id2,id1) = -t_hopping
-
-
-    ! conjugate hopping 0--->1,0--->2 for down spin
-    hamiltonian(id0+n_sites,id1+n_sites) = -t_hopping
-    hamiltonian(id0+n_sites,id2+n_sites) = -t_hopping
-
-    ! conjugate hopping 1--->0, 1--->2 for down spin
-    hamiltonian(id1+n_sites,id0+n_sites) = -t_hopping
-    hamiltonian(id1+n_sites,id2+n_sites) = -t_hopping
-
-    ! conjugate hopping 2--->0,2--->1 for down spin
-    hamiltonian(id2+n_sites,id0+n_sites) = -t_hopping
-    hamiltonian(id2+n_sites,id1+n_sites) = -t_hopping
-  end do
-
+  call haminitinUnitcell(hamiltonian,ns_unit,n_sites,dim_h)
 
   do i = 0,n_sites-1, 1
     !! sites in the unit cell
@@ -586,9 +555,37 @@ implicit none
   end do
   !print *,hamiltonian
 end subroutine ham_init
+
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine haminitinUnitcell(hamiltonian,ns_unit,n_sites,dim_h)
+  !!! this function will set the hopping element. It will set the hopping between the sites
+  !!! within the unit cell
+
+  integer(8) :: ns_unit , n_sites,dim_h
+  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
+  real(8) :: t_hopping 
+  do i = 0,n_sites-1, 1
+    id0 = (ns_unit*i) !! first site in the unit cell i
+    id1 = (ns_unit*i)+ 1 !! second site in the unit cell i
+    id2 = (ns_unit*i)+ 2  !! third site in the unit cell i
+ 
+    !!! hopping from site 0-->1 & 0--->2 for up and down spin
+    hamiltonian(id0,id1) = -t_hopping; hamiltonian(id0+n_sites,id1+n_sites) = -t_hopping
+    hamiltonian(id0,id2) = -t_hopping; hamiltonian(id0+n_sites,id2+n_sites) = -t_hopping
 
 
+    ! conjugate hopping 1--->0 & 1--->2 for down spin
+    hamiltonian(id1,id0) = -t_hopping; hamiltonian(id1+n_sites,id0+n_sites) = -t_hopping
+    hamiltonian(id1,id2) = -t_hopping; hamiltonian(id1+n_sites,id2+n_sites) = -t_hopping
+
+
+    ! conjugate hopping from 2-->0 and 2--->1
+    hamiltonian(id2,id0) = -t_hopping;hamiltonian(id2+n_sites,id0+n_sites) = -t_hopping
+    hamiltonian(id2,id1) = -t_hopping;hamiltonian(id2+n_sites,id1+n_sites) = -t_hopping
+  end do
+
+end subroutine haminitinUnitcell
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!initializing the cluster hamiltonian!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -658,10 +655,6 @@ implicit none
       !! 2--->0 & 2---> 1 for spin down in the unit cell at si
       hamil_cls((ns_unit*si)+2+cls_dim,(ns_unit*si)+cls_dim) = -t_hopping
       hamil_cls((ns_unit*si)+2+cls_dim,(ns_unit*si)+1+cls_dim) = -t_hopping
-
-
-
-
 
 
       
