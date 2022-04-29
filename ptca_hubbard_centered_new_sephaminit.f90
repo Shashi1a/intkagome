@@ -694,7 +694,7 @@ implicit none
       hamil_cls(ns_unit*si,sild*ns_unit) = -t_hopping
       hamil_cls(sild*ns_unit,si*ns_unit) = -t_hopping
 
-      
+      haminitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site,dim_clsh)
       !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
     end do
     
@@ -706,11 +706,11 @@ implicit none
 end subroutine cluster_ham
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! this subroutine will initialize the hamiltonian for the bonds outside the unit cell
-subroutine haminitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site)
-  integer(8) :: ns_unit,n_sites,site
+subroutine haminitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site,dim_clsh)
+  integer(8) :: ns_unit,n_sites,site,dim_clsh
   real(8) :: t_hopping
   integer(8),dimension(0:ns_unit-1,0:n_sites-1) :: right,left,up,down
-  
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1)
   !! 1st site in the unit cell and site it's connected to 2nd and 3rd site of other unit cell
   si0 = ns_unit*site 
   s0l = left(si) * ns_unit + 1 ; s0ld = left(down(si))*ns_unit + 2
@@ -746,9 +746,8 @@ subroutine haminitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,
   hamil_cls(s2ur,si2) = -t_hopping ; hamil_cls(s2ur+n_sites,si2+n_sites) = -t_hopping
 
 
-  
-end subroutine
 
+end subroutine
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
