@@ -705,6 +705,49 @@ implicit none
 
 end subroutine cluster_ham
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!! this subroutine will initialize the hamiltonian for the bonds outside the unit cell
+subroutine haminitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site)
+  integer(8) :: ns_unit,n_sites,site
+  real(8) :: t_hopping
+  integer(8),dimension(0:ns_unit-1,0:n_sites-1) :: right,left,up,down
+  
+  !! 1st site in the unit cell and site it's connected to 2nd and 3rd site of other unit cell
+  si0 = ns_unit*site 
+  s0l = left(si) * ns_unit + 1 ; s0ld = left(down(si))*ns_unit + 2
+
+  !! 2nd site in the unit cell is connected to 1st and 3rd site in the other unit cell
+  si1 = (ns_unit*site)+1 
+  s1r = right(si) * ns_unit ; s1d = ns_unit*down(si) + 2
+
+  !! 3rd site in the unit cell is connected to 1st site of unit cell in up and 0 site 
+  !! of unit cell in up right direction
+  si2 = (ns_unit*site)+2
+  s2u = (up(site)*ns_unit)+1 ; s2ur = right(up(i))*ns_unit 
+
+  !! matrix element between 0 site and neighbour
+  hamil_cls(si0,s0l) = -t_hopping ; hamil_cls(si0+n_sites,s0l+n_sites) = -t_hopping
+  hamil_cls(s0l,si0) = -t_hopping ; hamil_cls(s0l+n_sites,si0+n_sites) = -t_hopping
+
+  hamil_cls(si0,s0ld) = -t_hopping ; hamil_cls(si0+n_sites,s0ld+n_sites) = -t_hopping
+  hamil_cls(s0ld,si0) = -t_hopping ; hamil_cls(s0ld+n_sites,si0+n_sites) = -t_hopping
+  
+  !! matrix element between 1 site and neighbour
+  hamil_cls(si1,s1r) = -t_hopping;  hamil_cls(si1+n_sites,s1r+n_sites) = -t_hopping
+  hamil_cls(s1r,si1) = -t_hopping;hamil_cls(s1r+n_sites,si1+n_sites) = -t_hopping
+
+  hamil_cls(si1,s1d) = -t_hopping ; hamil_cls(si1+n_sites,s1d) = -t_hopping
+  hamil_cls(s1d,si1) = -t_hopping ; hamil_cls(s1d,si1+n_sites) = -t_hopping
+
+  !! matrix element between 2nd site and neighbour
+  hamil_cls(si2,s2u)  = -t_hopping ; hamil_cls(si2+n_sites,s2u+n_sites) = -t_hopping
+  hamil_cls(s2u+n_sites,si2)  = -t_hopping ; hamil_cls(s2u+n_sites,si2+n_sites) = -t_hopping
+
+  hamil_cls(si2,s2ur) = -t_hopping ; hamil_cls(si2+n_sites,s2ur+n_sites) = -t_hopping
+  hamil_cls(s2ur,si2) = -t_hopping ; hamil_cls(s2ur+n_sites,si2+n_sites) = -t_hopping
+
+
+  
+end subroutine
 
 
 
