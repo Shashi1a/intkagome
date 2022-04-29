@@ -471,14 +471,15 @@ implicit none
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   hamiltonian(:,:) = cmplx(0.0,0.0)
 
+  !! setting hopping dependent terms
   call haminitinUnitcell(hamiltonian,ns_unit,n_sites,dim_h)
 
   do i = 0,n_sites-1, 1
     !! sites in the unit cell
-    id0 = (ns_unit*i);id1 = (ns_unit*i)+1;id2 = (ns_unit*i)+2
+    id0 = (ns_unit*i); id1 = (ns_unit*i)+1; id2 = (ns_unit*i)+2
 
     !! neighbouring unit cell 
-    ri = right(i);li = left(i);ui = up(i);di = down(i);rui = right_up(i);ldi = left_down(i)
+    ri = right(i); li = left(i); ui = up(i); di = down(i); rui = right_up(i); ldi = left_down(i)
 
     !! neighbour of site 0
     s0l = (ns_unit*li) + 1 ; s0ld = (ns_unit*ldi)+2
@@ -488,32 +489,6 @@ implicit none
 
     !! neighbour of site 2
     s2u = (ns_unit*ui) + 1; s2ur = (ns_unit*rui)
-
-
-    !! hopping between 0th site and site outside unit cell for up spin
-    hamiltonian(id0,s0l) = -t_hopping ; hamiltonian(s0l,id0) = -t_hopping
-    hamiltonian(id0,s0ld) = -t_hopping ; hamiltonian(s0ld,id0) = -t_hopping
-    
-    !! hopping between 1st site and site outside unit cell for up spin
-    hamiltonian(id1,s1r) = -t_hopping ; hamiltonian(s1r,id1) = -t_hopping
-    hamiltonian(id1,s1d) = -t_hopping ; hamiltonian(s1d,id1) = -t_hopping
-
-    !! hopping between 2nd site and site outside the unit cell for up spin
-    hamiltonian(id2,s2u) = -t_hopping ; hamiltonian(s2u,id2) = -t_hopping
-    hamiltonian(id2,s2ur) = -t_hopping ; hamiltonian(s2ur,id2) = -t_hopping
-
-
-    !! hopping between 0th site and site outside unit cell for down spin
-    hamiltonian(id0+n_sites,s0l+n_sites) = -t_hopping ; hamiltonian(s0l+n_sites,id0+n_sites) = -t_hopping
-    hamiltonian(id0+n_sites,s0ld+n_sites) = -t_hopping ; hamiltonian(s0ld+n_sites,id0+n_sites) = -t_hopping
-    
-    !! hopping between 1st site and site outside unit cell for down spin
-    hamiltonian(id1+n_sites,s1r+n_sites) = -t_hopping ; hamiltonian(s1r+n_sites,id1+n_sites) = -t_hopping
-    hamiltonian(id1+n_sites,s1d+n_sites) = -t_hopping ; hamiltonian(s1d+n_sites,id1+n_sites) = -t_hopping
-
-    !! hopping between 2nd site and site outside the unit cell for down spin
-    hamiltonian(id2+n_sites,s2u+n_sites) = -t_hopping ; hamiltonian(s2u+n_sites,id2+n_sites) = -t_hopping
-    hamiltonian(id2+n_sites,s2ur+n_sites) = -t_hopping ; hamiltonian(s2ur+n_sites,id2+n_sites) = -t_hopping
 
 
     !!! mx for three sites in the unit cell
@@ -558,34 +533,100 @@ end subroutine ham_init
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine haminitinUnitcell(hamiltonian,ns_unit,n_sites,dim_h)
-  !!! this function will set the hopping element. It will set the hopping between the sites
-  !!! within the unit cell
+!!! this function will set the hopping element. It will set the hopping between the sites
+!!! within the unit cell
 
+subroutine haminitinUnitcell(hamiltonian,ns_unit,n_sites,dim_h,right,left,up,down,t_hopping)
+implicit none  
+  integer :: id0 ,id1,id2 ,id0n , id1n , id2n
   integer(8) :: ns_unit , n_sites,dim_h
-  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
+  integer(8),dimension(0:n_sites-1)::right,left,up,down
   real(8) :: t_hopping 
+  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
+  
+  
   do i = 0,n_sites-1, 1
     id0 = (ns_unit*i) !! first site in the unit cell i
     id1 = (ns_unit*i)+ 1 !! second site in the unit cell i
     id2 = (ns_unit*i)+ 2  !! third site in the unit cell i
- 
+    id0n = id0+n_sites  !! index for the spin down in unit cell i position 0
+    id1n = id1+n_sites  !! index for the spin down in unit cell i position 1
+    id2n = id2+n_sites  !! index for the spin down in unit cell i position 2
+    
     !!! hopping from site 0-->1 & 0--->2 for up and down spin
-    hamiltonian(id0,id1) = -t_hopping; hamiltonian(id0+n_sites,id1+n_sites) = -t_hopping
-    hamiltonian(id0,id2) = -t_hopping; hamiltonian(id0+n_sites,id2+n_sites) = -t_hopping
+    hamiltonian(id0,id1) = -t_hopping; hamiltonian(id0n,id1n) = -t_hopping
+    hamiltonian(id0,id2) = -t_hopping; hamiltonian(id0n,id2n) = -t_hopping
+
+    ! conjugate hopping 1--->0 & 1--->2 for up and down spin
+    hamiltonian(id1,id0) = -t_hopping; hamiltonian(id1n,id0n) = -t_hopping
+    hamiltonian(id1,id2) = -t_hopping; hamiltonian(id1n,id2n) = -t_hopping
+
+    ! conjugate hopping from 2-->0 and 2--->1 for up and down spin
+    hamiltonian(id2,id0) = -t_hopping; hamiltonian(id2n,id0n) = -t_hopping
+    hamiltonian(id2,id1) = -t_hopping; hamiltonian(id2n,id1n) = -t_hopping
+  end do
+call haminitOutunitcell(right,left,up,down,hamiltonian,ns_unit,n_sites,t_hopping,site,dim_h)
+end subroutine haminitinUnitcell
+!!-----------------------------------------------------------------------------!!
 
 
-    ! conjugate hopping 1--->0 & 1--->2 for down spin
-    hamiltonian(id1,id0) = -t_hopping; hamiltonian(id1+n_sites,id0+n_sites) = -t_hopping
-    hamiltonian(id1,id2) = -t_hopping; hamiltonian(id1+n_sites,id2+n_sites) = -t_hopping
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!! initializing the hamiltonian for the hopping for sites within the outsite
+subroutine haminitOutunitcell(right,left,up,down,hamiltonian,ns_unit,n_sites,t_hopping,dim_h)
+  integer(8) :: ns_unit,n_sites,site,dim_h
+  integer :: si 
+  integer :: si0, s0l, s0ld, si0n, s0ln, s0ldn ! sites related to 0 site in the unit cell 
+  integer :: si1, s1r, s1d, si1n, s1rn, s1dn ! sites related to site 1 in the unit cell
+  integer :: si2 , s2u, s2ur , si2n , s2un , s2urn ! sites related to site 2 in the unit cell
+  real(8) :: t_hopping
+  integer(8),dimension(0:n_sites-1) :: right,left,up,down
+  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
+  
 
+  do si=0,n_sites-1,1  
+    !! 1st site in the unit cell and site it's connected to 2nd and 3rd site of other unit cell
+    si0 = ns_unit*si 
+    s0l = left(si) * ns_unit + 1 ; s0ld = left(down(si))*ns_unit + 2
+    si0n = si0+n_sites ; s0ln = s0l+n_sites ; s0ldn = s0ld+n_sites
 
-    ! conjugate hopping from 2-->0 and 2--->1
-    hamiltonian(id2,id0) = -t_hopping;hamiltonian(id2+n_sites,id0+n_sites) = -t_hopping
-    hamiltonian(id2,id1) = -t_hopping;hamiltonian(id2+n_sites,id1+n_sites) = -t_hopping
+    !! 2nd site in the unit cell is connected to 1st and 3rd site in the other unit cell
+    si1 = (ns_unit*si)+1 
+    s1r = right(si) * ns_unit ; s1d = ns_unit*down(si) + 2
+    si1n = si1+n_sites; s1rn = s1r+n_sites;s1dn = s1d+n_sites
+
+    !! 3rd site in the unit cell is connected to 1st site of unit cell in up and 0 site 
+    !! of unit cell in up right direction
+    si2 = (ns_unit*si)+2
+    s2u = (up(site)*ns_unit)+1 ; s2ur = right(up(i))*ns_unit 
+    si2n = si2+n_sites; s2un  = s2u + n_sites ; s2urn = s2ur+n_sites
+
+    !! matrix element between 0 site and neighbour for up and down spins
+    hamiltonian(si0,s0l) = -t_hopping ; hamiltonian(si0n,s0ln) = -t_hopping
+    hamiltonian(s0l,si0) = -t_hopping ; hamiltonian(s0ln,si0n) = -t_hopping
+
+    hamiltonian(si0,s0ld) = -t_hopping ; hamiltonian(si0n,s0ldn) = -t_hopping
+    hamiltonian(s0ld,si0) = -t_hopping ; hamiltonian(s0ldn,si0n) = -t_hopping
+  
+    !! matrix element between 1 site and neighbour for up and down spins
+    hamiltonian(si1,s1r) = -t_hopping;  hamiltonian(si1n,s1rn) = -t_hopping
+    hamiltonian(s1r,si1) = -t_hopping; hamiltonian(s1rn,si1n) = -t_hopping
+
+    hamiltonian(si1,s1d) = -t_hopping ; hamiltonian(si1n,s1dn) = -t_hopping
+    hamiltonian(s1d,si1) = -t_hopping ; hamiltonian(s1dn,si1n) = -t_hopping
+
+    !! matrix element between 2nd site and neighbour for up and down spins
+    hamiltonian(si2,s2u)  = -t_hopping ; hamiltonian(si2n,s2un) = -t_hopping
+    hamiltonian(s2u,si2)  = -t_hopping ; hamiltonian(s2un,si2n) = -t_hopping
+
+    hamiltonian(si2,s2ur) = -t_hopping ; hamiltonian(si2n,s2urn) = -t_hopping
+    hamiltonian(s2ur,si2) = -t_hopping ; hamiltonian(s2urn,si2n) = -t_hopping
+  
   end do
 
-end subroutine haminitinUnitcell
+end subroutine
+
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!initializing the cluster hamiltonian!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -658,6 +699,21 @@ implicit none
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
+
+
+      hamclsinitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site,dim_clsh)
+      !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
+    end do
+    
+
+!! uncomment to see the site and neighbour
+!    print *,'ri',right_cls
+!    print *,'ui',up_cls
+
+end subroutine cluster_ham
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine hamclsinitinUnitcell()
+
       !! 0--->1 & 0--->2 for spin up in the unit cell at si
       hamil_cls(ns_unit*si,(ns_unit*si)+1) = -t_hopping
       hamil_cls(ns_unit*si,(ns_unit*si)+2) = -t_hopping
@@ -683,28 +739,13 @@ implicit none
       hamil_cls((ns_unit*si)+2+cls_dim,(ns_unit*si)+cls_dim) = -t_hopping
       hamil_cls((ns_unit*si)+2+cls_dim,(ns_unit*si)+1+cls_dim) = -t_hopping
 
+  end subroutine hamclsinitinUnitcell
 
-      
-      !!! out of the unit cell hopping for the 1st 
-      hamil_cls(ns_unit*si,sli*ns_unit) = -t_hopping
-      hamil_cls(sli*ns_unit,si*ns_unit) = -t_hopping
 
-      hamil_cls(ns_unit*si,sild*ns_unit) = -t_hopping
-      hamil_cls(sild*ns_unit,si*ns_unit) = -t_hopping
-
-      haminitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site,dim_clsh)
-      !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
-    end do
-    
-
-!! uncomment to see the site and neighbour
-!    print *,'ri',right_cls
-!    print *,'ui',up_cls
-
-end subroutine cluster_ham
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! this subroutine will initialize the hamiltonian for the bonds outside the unit cell
-subroutine haminitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site,dim_clsh)
+subroutine hamclsinitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site,dim_clsh)
   integer(8) :: ns_unit,n_sites,site,dim_clsh
   real(8) :: t_hopping
   integer(8),dimension(0:ns_unit-1,0:n_sites-1) :: right,left,up,down
@@ -744,8 +785,7 @@ subroutine haminitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,
   hamil_cls(s2ur,si2) = -t_hopping ; hamil_cls(s2ur+n_sites,si2+n_sites) = -t_hopping
 
 
-
-end subroutine
+end subroutine hamclsinitOutunitcell
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -867,7 +907,7 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   real(8)  :: tvar
   real(8) :: m_min,m_max,mc_prob
   integer(8), dimension(0:n_sites-1,0:cls_dim-1)::cl_st ! sites in the cluster at site j
-
+ 
   !!! variables for the monte carlo procedure
   real(8) :: tempmx0,tempmy0,tempmz0 ! to store initial value of mx,my,mz
   real(8) :: tempmx1,tempmy1,tempmz1 ! to store initial value of mx,my,mz
