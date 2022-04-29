@@ -701,89 +701,121 @@ implicit none
 
 
 
-      hamclsinitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site,dim_clsh)
       !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
     end do
-    
-
+    call hamclsinitinUnitcell(ns_unit,hamil_cls,t_hopping,cls_dim,dim_clsh,cls_sites)
+    call hamclsinitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site,dim_clsh)
 !! uncomment to see the site and neighbour
 !    print *,'ri',right_cls
 !    print *,'ui',up_cls
 
 end subroutine cluster_ham
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine hamclsinitinUnitcell()
+subroutine hamclsinitinUnitcell(ns_unit,hamil_cls,t_hopping,cls_dim,dim_clsh,cls_sites)
+  implicit none
+  integer :: i,x,y,si
+  integer(8)::ns_unit,dim_clsh,cls_dim,cls_sites
+  real(8) :: t_hopping
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1)::hamil_cls
+  integer(8) :: nsi0,nsi1,nsi2
+  integer(8) :: nsi0c,nsi1c;nsi2c
+  
+  do i = 0, cls_dim-1, 1
+      x = mod(i,cls_sites) ! x index in the  site cluster x --> [0,1,cls_sites-1]
+      y = i/cls_sites       ! y index in the  site cluster y --> [0,1,cls_sites-1]
+      si = x+(cls_sites*y)  ! site produced in the  site cluster si-->[0,cls_dim-1]
+
+
+      nsi0 = ns_unit*si ; nsi1 = nsi0+1 ; nsi2 = nsi0+2
+      nsi0c = nsi0+cls_dim ; nsi1c = nsi1+cls_dim ;  nsi2c = nsi2+cls_dim
 
       !! 0--->1 & 0--->2 for spin up in the unit cell at si
-      hamil_cls(ns_unit*si,(ns_unit*si)+1) = -t_hopping
-      hamil_cls(ns_unit*si,(ns_unit*si)+2) = -t_hopping
+      hamil_cls(nsi0,nsi1) = -t_hopping
+      hamil_cls(nsi0,nsi2) = -t_hopping
       
       !! 1--->0 & 1---> 2 for spin up in the unit cell at si
-      hamil_cls((ns_unit*si)+1,(ns_unit*si)) = -t_hopping
-      hamil_cls((ns_unit*si)+1,(ns_unit*si)+2) = -t_hopping
+      hamil_cls(nsi1,nsi0) = -t_hopping
+      hamil_cls(nsi1,nsi2) = -t_hopping
 
       !! 2--->0 & 2---> 1 for spin up in the unit cell at si
-      hamil_cls((ns_unit*si)+2,(ns_unit*si)) = -t_hopping
-      hamil_cls((ns_unit*si)+2,(ns_unit*si)+1) = -t_hopping
+      hamil_cls(nsi2,nsi0) = -t_hopping
+      hamil_cls(nsi2,nsi1) = -t_hopping
       
 
       !! 0--->1 & 0--->2 for spin down in the unit cell at si
-      hamil_cls(ns_unit*si+cls_dim,(ns_unit*si)+1+cls_dim) = -t_hopping
-      hamil_cls(ns_unit*si+cls_dim,(ns_unit*si)+2+cls_dim) = -t_hopping
+      hamil_cls(nsi0c,nsi1c) = -t_hopping
+      hamil_cls(nsi0c,nsi2c) = -t_hopping
       
       !! 1--->0 & 1---> 2 for spin down in the unit cell at si
-      hamil_cls((ns_unit*si)+1+cls_dim,(ns_unit*si)+cls_dim) = -t_hopping
-      hamil_cls((ns_unit*si)+1+cls_dim,(ns_unit*si)+2+cls_dim) = -t_hopping
+      hamil_cls(nsi1c,nsi0c) = -t_hopping
+      hamil_cls(nsi1c,nsi2c) = -t_hopping
 
       !! 2--->0 & 2---> 1 for spin down in the unit cell at si
-      hamil_cls((ns_unit*si)+2+cls_dim,(ns_unit*si)+cls_dim) = -t_hopping
-      hamil_cls((ns_unit*si)+2+cls_dim,(ns_unit*si)+1+cls_dim) = -t_hopping
+      hamil_cls(nsi2c,nsi0c) = -t_hopping
+      hamil_cls(nsi2c,nsi1c) = -t_hopping
+  end do
 
-  end subroutine hamclsinitinUnitcell
+end subroutine hamclsinitinUnitcell
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! this subroutine will initialize the hamiltonian for the bonds outside the unit cell
-subroutine hamclsinitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site,dim_clsh)
-  integer(8) :: ns_unit,n_sites,site,dim_clsh
+subroutine hamclsinitOutunitcell(right,left,up,down,hamil_cls,si,ns_unit,n_sites,t_hopping,site,dim_clsh)
+  implicit none
+  integer :: si,i,x,y  
+  integer(8) :: si0 , s0l , s0ld , si0n , s0ln , s0ldn
+  integer(8) :: si1, s1r , s1d , si1n , s1rn , s1dn
+  integer(8) :: si2 , s2u ,s2ur , si2n , s2un , s2urn
+  integer(8) :: ns_unit,n_sites,si,dim_clsh,cls_sites
   real(8) :: t_hopping
-  integer(8),dimension(0:ns_unit-1,0:n_sites-1) :: right,left,up,down
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1)
-  !! 1st site in the unit cell and site it's connected to 2nd and 3rd site of other unit cell
-  si0 = ns_unit*site 
-  s0l = left(si) * ns_unit + 1 ; s0ld = left(down(si))*ns_unit + 2
-
-  !! 2nd site in the unit cell is connected to 1st and 3rd site in the other unit cell
-  si1 = (ns_unit*site)+1 
-  s1r = right(si) * ns_unit ; s1d = ns_unit*down(si) + 2
-
-  !! 3rd site in the unit cell is connected to 1st site of unit cell in up and 0 site 
-  !! of unit cell in up right direction
-  si2 = (ns_unit*site)+2
-  s2u = (up(site)*ns_unit)+1 ; s2ur = right(up(i))*ns_unit 
-
-  !! matrix element between 0 site and neighbour
-  hamil_cls(si0,s0l) = -t_hopping ; hamil_cls(si0+n_sites,s0l+n_sites) = -t_hopping
-  hamil_cls(s0l,si0) = -t_hopping ; hamil_cls(s0l+n_sites,si0+n_sites) = -t_hopping
-
-  hamil_cls(si0,s0ld) = -t_hopping ; hamil_cls(si0+n_sites,s0ld+n_sites) = -t_hopping
-  hamil_cls(s0ld,si0) = -t_hopping ; hamil_cls(s0ld+n_sites,si0+n_sites) = -t_hopping
+  integer(8),dimension(0:n_sites-1) :: right,left,up,down
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: dim_clsh
   
-  !! matrix element between 1 site and neighbour
-  hamil_cls(si1,s1r) = -t_hopping;  hamil_cls(si1+n_sites,s1r+n_sites) = -t_hopping
-  hamil_cls(s1r,si1) = -t_hopping;hamil_cls(s1r+n_sites,si1+n_sites) = -t_hopping
+   do i = 0, cls_dim-1, 1
+      x = mod(i,cls_sites) ! x index in the  site cluster x --> [0,1,cls_sites-1]
+      y = i/cls_sites       ! y index in the  site cluster y --> [0,1,cls_sites-1]
+      si = x+(cls_sites*y)  ! site produced in the  site cluster si-->[0,cls_dim-1]
 
-  hamil_cls(si1,s1d) = -t_hopping ; hamil_cls(si1+n_sites,s1d) = -t_hopping
-  hamil_cls(s1d,si1) = -t_hopping ; hamil_cls(s1d,si1+n_sites) = -t_hopping
 
-  !! matrix element between 2nd site and neighbour
-  hamil_cls(si2,s2u)  = -t_hopping ; hamil_cls(si2+n_sites,s2u+n_sites) = -t_hopping
-  hamil_cls(s2u+n_sites,si2)  = -t_hopping ; hamil_cls(s2u+n_sites,si2+n_sites) = -t_hopping
+      !! 1st site in the unit cell and site it's connected to 2nd and 3rd site of other unit cell
+      si0 = ns_unit*si ; si0n = si0 + n_sites
+      s0l = left(si) * ns_unit + 1 ; s0ln = s0l + n_sites
+      s0ld = left(down(si))*ns_unit + 2 ; s0ldn = s0ld + n_sites
 
-  hamil_cls(si2,s2ur) = -t_hopping ; hamil_cls(si2+n_sites,s2ur+n_sites) = -t_hopping
-  hamil_cls(s2ur,si2) = -t_hopping ; hamil_cls(s2ur+n_sites,si2+n_sites) = -t_hopping
+      !! 2nd site in the unit cell is connected to 1st and 3rd site in the other unit cell
+      si1 = (ns_unit*site)+1 ; si1n = si1 + n_sites
+      s1r = right(si) * ns_unit ; s1rn = s1r + n_sites
+      s1d = ns_unit*down(si) + 2 ; s1dn = s1d + n_sites
 
+      !! 3rd site in the unit cell is connected to 1st site of unit cell in up and 0 site 
+      !! of unit cell in up right direction
+      si2 = (ns_unit*site)+2 ; si2n = si2 + n_sites
+      s2u = (up(site)*ns_unit)+1 ; s2un = s2u + n_sites
+      s2ur = right(up(i))*ns_unit ; s2urn = s2ur + n_sites
+
+      !! matrix element between 0 site and neighbour
+      hamil_cls(si0,s0l) = -t_hopping ; hamil_cls(si0n,s0ln) = -t_hopping
+      hamil_cls(s0l,si0) = -t_hopping ; hamil_cls(s0ln,si0n) = -t_hopping
+
+      hamil_cls(si0,s0ld) = -t_hopping ; hamil_cls(si0n,s0ldn) = -t_hopping
+      hamil_cls(s0ld,si0) = -t_hopping ; hamil_cls(s0ldn,si0n) = -t_hopping
+  
+      !! matrix element between 1 site and neighbour
+      hamil_cls(si1,s1r) = -t_hopping;  hamil_cls(si1n,s1rn) = -t_hopping
+      hamil_cls(s1r,si1) = -t_hopping;hamil_cls(s1rn,si1n) = -t_hopping
+
+      hamil_cls(si1,s1d) = -t_hopping ; hamil_cls(si1n,s1dn) = -t_hopping
+      hamil_cls(s1d,si1) = -t_hopping ; hamil_cls(s1dn,si1n) = -t_hopping
+
+      !! matrix element between 2nd site and neighbour
+      hamil_cls(si2,s2u)  = -t_hopping ; hamil_cls(si2n,s2un) = -t_hopping
+      hamil_cls(s2u,si2)  = -t_hopping ; hamil_cls(s2un,si2n) = -t_hopping
+
+      hamil_cls(si2,s2ur) = -t_hopping ; hamil_cls(si2n,s2urn) = -t_hopping
+      hamil_cls(s2ur,si2) = -t_hopping ; hamil_cls(s2urn,si2n) = -t_hopping
+  
+   end do 
 
 end subroutine hamclsinitOutunitcell
 
