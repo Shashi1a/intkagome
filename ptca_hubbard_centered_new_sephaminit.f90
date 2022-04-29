@@ -621,9 +621,18 @@ implicit none
       xip = mod(x+1,cls_sites)  ! x+1 in the cluster with pbc (with cls_sites)
       yip = mod(y+1,cls_sites) ! y+1 in the cluster with pbc
 
+      xim = mod(x-1+cls_sites,cls_sites) !! x-1 in the cluster (pbc)
+      yim = mod(y-1+cls_sites,cls_sites) !! y-1 in the cluster (pbc)
+
       sri = xip + (y*cls_sites) ! right site of the cluster
       sui = x + (yip*cls_sites) ! up side of the cluster
+
+      sli = xim + (y*cls_sites)  !! left site in the cluster
+      sdi = x + (yim*cls_sites) !! down site in the cluster
       
+      sild = xim + (yim*cls_sites) !! site in the left down of si
+      siru = xip + (yip*cls_sites) !! site in the right up of si
+
       !print *,si,cl_st(site_clster,si),site_clster
       
       !!! diagonal part of the cluster hamiltonian !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -678,9 +687,12 @@ implicit none
       hamil_cls((ns_unit*si)+2+cls_dim,(ns_unit*si)+1+cls_dim) = -t_hopping
 
 
-      
+      !!! out of the unit cell hopping for the 1st 
+      hamil_cls(ns_unit*si,sli*ns_unit) = -t_hopping
+      hamil_cls(sli*ns_unit,si*ns_unit) = -t_hopping
 
-
+      hamil_cls(ns_unit*si,sild*ns_unit) = -t_hopping
+      hamil_cls(sild*ns_unit,si*ns_unit) = -t_hopping
 
       
       !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
