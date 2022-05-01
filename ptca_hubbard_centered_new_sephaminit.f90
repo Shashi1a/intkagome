@@ -484,7 +484,7 @@ implicit none
     !! neighbour of site 0
     s0l = (ns_unit*li) + 1 ; s0ld = (ns_unit*ldi)+2
 
-    !! neighbour of site 1
+    !! neighbour of site 1 
     s1r = (ns_unit*ri) ; s1d = (ns_unit*di + 2)
 
     !! neighbour of site 2
@@ -502,7 +502,9 @@ implicit none
     my2 = m(2,i) * sin(phi(1,i)) * sin(theta(2,i))
     
     !! mz for three sites in the unit cell
-    mz0 = m(0,i) *  cos(theta(0,i));mz1 = m(1,i) *  cos(theta(1,i));mz2 = m(2,i) *  cos(theta(2,i))
+    mz0 = m(0,i) *  cos(theta(0,i))
+    mz1 = m(1,i) *  cos(theta(1,i))
+    mz2 = m(2,i) *  cos(theta(2,i))
     
     !! for up spins
     hamiltonian(id0,id0) =  -(mu-0.5*u_int) - (0.5*u_int)*mz0
@@ -675,31 +677,41 @@ implicit none
       
       !!! diagonal part of the cluster hamiltonian !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       !!! setting up the up,down and down up terms for the 1st site in the unit cell.
-      hamil_cls(si*ns_unit,(si*ns_unit)+cls_dim) = hamiltonian(cl_st(site_clster,si)*ns_unit,cl_st(site_clster,si)*ns_unit+n_sites)
-      hamil_cls((si*ns_unit)+cls_dim,si*ns_unit) = hamiltonian(cl_st(site_clster,si)*ns_unit+n_sites,cl_st(site_clster,si)*ns_unit)
 
-      !!! setting up the up,down and down up terms for the 2nd site in the unit cell
-      hamil_cls(si*ns_unit+1,(si*ns_unit)+1+cls_dim) = hamiltonian(cl_st(site_clster,si)*ns_unit+1,cl_st(site_clster,si)*ns_unit+1+n_sites)
-      hamil_cls((si*ns_unit)+cls_dim+1,si*ns_unit+1) = hamiltonian(cl_st(site_clster,si)*ns_unit+1+n_sites,cl_st(site_clster,si)*ns_unit+1)
-
-      !!! setting up the up,down and down up terms for the 3rd site in the unit cell
-      hamil_cls(si*ns_unit+2,(si*ns_unit)+cls_dim+2) = hamiltonian(cl_st(site_clster,si)*ns_unit+2,cl_st(site_clster,si)*ns_unit+n_sites+2)
-      hamil_cls((si*ns_unit)+cls_dim+2,si*ns_unit+2) = hamiltonian(cl_st(site_clster,si)*ns_unit+n_sites+2,cl_st(site_clster,si)*ns_unit+2)
+      sic = si*ns_unit ; sicn = sic + cls_dim  !! index of a site 0 in the cluster for up and dn spin
+      clsi = cl_st(site_clster,si)*ns_unit ; clsin = clsi +n_sites  !! index of site 0 in the lattice for up and dn spin
 
 
-      !!! diagonal part of the hamiltonian for upup and dndn for site 0,1,2
-      hamil_cls(ns_unit*si,ns_unit*si)=hamiltonian(cl_st(site_clster,si),cl_st(site_clster,si))
-      hamil_cls(ns_unit*si+cls_dim,ns_unit*si+cls_dim)=hamiltonian(cl_st(site_clster,si)+n_sites,cl_st(site_clster,si)+n_sites)
+      sic1 = sic + 1 ; sicn1 = sicn+1 !! index of site1 in the cluster for up and down spin
+      clsi1 = clsi + 1; clsin1 = clsin+1 !! index of site1 in the lattice for up and down spin
 
-      hamil_cls(ns_unit*si+1,ns_unit*si+1)=hamiltonian(cl_st(site_clster,si),cl_st(site_clster,si))
-      hamil_cls(ns_unit*si+cls_dim,si+cls_dim)=hamiltonian(cl_st(site_clster,si)+n_sites,cl_st(site_clster,si)+n_sites)
+      sic2 = sic1 + 1 ; sicn2 = sicn1+1   !! index of site2 in the clsuter for up and down spin
+      clsi2 = clsi1 + 1; clsin2 = clsin1+1 !! index of site2 in the lattice for up and down spin
 
-      hamil_cls(ns_unit*si+2,ns_unit*si+2)=hamiltonian(cl_st(site_clster,si),cl_st(site_clster,si))
-      hamil_cls(si+cls_dim,si+cls_dim)=hamiltonian(cl_st(site_clster,si)+n_sites,cl_st(site_clster,si)+n_sites)
-      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      !! setting the term between up,down for site 0 in the cluster from the hamiltonian
+      hamil_cls(sic,sicn) = hamiltonian(clsi,clsin)  !! term that is mx+imy
+      hamil_cls(sicn,sic) = hamiltonian(clsin,clsi)  !! term that is mx-imy
+
+      !!! setting up term between up,down for site 1 in the cluster from hamiltonian
+      hamil_cls(sic1,sicn1) = hamiltonian(clsi1,clsin1)
+      hamil_cls(sicn1,sic1) = hamiltonian(clsin1,clsi1)
+
+      !!! setting up the term between up,down for site 2 in the cluster from hamiltonian
+      hamil_cls(sic2,sicn2) = hamiltonian(clsi2,clsin2)
+      hamil_cls(sicn2,sic2) = hamiltonian(clsin2,clsi2)
 
 
+      !!! diagonal part of the hamiltonian for upup and dndn for site 0
+      hamil_cls(sic,sic)=hamiltonian(clsi,clsi)  !! term that is mz
+      hamil_cls(sicn,sicn)=hamiltonian(clsin,clsin) !! term that is -mz
 
+      !!! diagonal part of the hamiltonian for upup and dndn for site 1
+      hamil_cls(sic1,sic1)=hamiltonian(clsi1,clsi1)
+      hamil_cls(sicn1,sicn1)=hamiltonian(clsin1,clsin1)
+
+      !!! diagonal part of the hamiltonian for upup and dndn for site 2
+      hamil_cls(sic2,sic2)=hamiltonian(clsi2,clsi2))
+      hamil_cls(sicn2,sicn2)=hamiltonian(clsin2,clsin2)
 
       !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
     end do
