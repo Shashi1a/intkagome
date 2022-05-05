@@ -13,7 +13,7 @@ program ptca_repulsive
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
   integer(8),parameter :: ns_unit = 3
-  integer(8),parameter :: L = 10 !! system size
+  integer(8),parameter :: L = 4 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
   integer(8),parameter :: cls_sites =  8 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
@@ -108,7 +108,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-
+    go to 2000
     !! subroutine to initialize the arrays with sites splits in 4 subgroup 
     call cluster_sites(cls_sites,L,n_sites,cl_st,cls_dim)
 
@@ -372,6 +372,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
       !!! lower the temperature of the system
       tvar = tvar-dtemp
     end do
+  2000 continue
 
   call MPI_BARRIER(MPI_COMM_WORLD,ierr)
   call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -426,7 +427,7 @@ implicit none
   real(8) :: m_min,m_max
   real(8):: rand3,rand1,rand2
   real(8) :: rand_int3,rand_int1,rand_int2
-  real(8),dimension(0:n_sites-1) :: m,theta,phi  
+  real(8),dimension(0,ns_unit,0:n_sites-1) :: m,theta,phi  
 
   do i = 0, n_sites-1, 1
     do j=0,ns_unit-1,1
@@ -466,7 +467,9 @@ implicit none
   real(8) :: t_hopping,mu,u_int
   integer(8),dimension(0:n_sites-1) :: right,left,up,down,right_up,left_down
 
-  real(8) ::mx,my,mz
+  real(8) ::mx0,mx1,mx2
+  real(8) ::my0,my1,my2
+  real(8) ::mz0,mz1,mz2
   real(8),dimension(0:ns_unit,0:n_sites-1)::m,theta,phi
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   hamiltonian(:,:) = cmplx(0.0,0.0)
@@ -540,7 +543,7 @@ end subroutine ham_init
 
 subroutine haminitinUnitcell(hamiltonian,ns_unit,n_sites,dim_h,right,left,up,down,t_hopping)
 implicit none  
-  integer :: id0 ,id1,id2 ,id0n , id1n , id2n
+  integer :: id0 ,id1,id2 ,id0n , id1n , id2n,i
   integer(8) :: ns_unit , n_sites,dim_h
   integer(8),dimension(0:n_sites-1)::right,left,up,down
   real(8) :: t_hopping 
@@ -710,8 +713,8 @@ implicit none
       hamil_cls(sicn1,sicn1)=hamiltonian(clsin1,clsin1)
 
       !!! diagonal part of the hamiltonian for upup and dndn for site 2
-      hamil_cls(sic2,sic2)=hamiltonian(clsi2,clsi2))
-      hamil_cls(sicn2,sicn2)=hamiltonian(clsin2,clsin2)
+    !  hamil_cls(sic2,sic2)=hamiltonian(clsi2,clsi2))
+    !  hamil_cls(sicn2,sicn2)=hamiltonian(clsin2,clsin2)
 
       !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
     end do
@@ -730,7 +733,7 @@ subroutine hamclsinitinUnitcell(ns_unit,hamil_cls,t_hopping,cls_dim,dim_clsh,cls
   real(8) :: t_hopping
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1)::hamil_cls
   integer(8) :: nsi0,nsi1,nsi2
-  integer(8) :: nsi0c,nsi1c;nsi2c
+  integer(8) :: nsi0c,nsi1c,nsi2c
   
   do i = 0, cls_dim-1, 1
       x = mod(i,cls_sites) ! x index in the  site cluster x --> [0,1,cls_sites-1]
@@ -779,7 +782,7 @@ subroutine hamclsinitOutunitcell(right,left,up,down,hamil_cls,si,ns_unit,n_sites
   integer(8) :: si0 , s0l , s0ld , si0n , s0ln , s0ldn
   integer(8) :: si1, s1r , s1d , si1n , s1rn , s1dn
   integer(8) :: si2 , s2u ,s2ur , si2n , s2un , s2urn
-  integer(8) :: ns_unit,n_sites,si,dim_clsh,cls_sites
+  integer(8) :: ns_unit,n_sites,dim_clsh,cls_sites
   real(8) :: t_hopping
   integer(8),dimension(0:n_sites-1) :: right,left,up,down
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: dim_clsh
@@ -1196,7 +1199,7 @@ end subroutine mc_sweep
 !! ---------------------------------------------------------------------------!!
 subroutine enr_calc(egval,dim_clsh,loc_m,n_sites,cl_st,cls_dim,enr_loc,site_clster,tvar,u_int)
 implicit none
-  integer(8) :: i,n_sites,
+  integer(8) :: i,n_sites
   integer(8) :: si,ns_unit
   integer(8) :: dim_clsh,cls_dim,site_clster
   integer(8),dimension(0:n_sites-1,0:cls_dim-1)::cl_st
