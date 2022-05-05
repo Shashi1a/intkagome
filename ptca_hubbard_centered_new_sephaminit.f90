@@ -13,7 +13,7 @@ program ptca_repulsive
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
   integer(8),parameter :: ns_unit = 3
-  integer(8),parameter :: L = 20 !! system size
+  integer(8),parameter :: L = 6 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
   integer(8),parameter :: cls_sites =  L !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
@@ -30,7 +30,7 @@ program ptca_repulsive
   real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
-  real(8),parameter :: u_int = 0.0
+  real(8),parameter :: u_int = 2.0
   real(8),parameter :: mu = 0.5*(u_int)
   real(8),parameter :: m_max=2.0_8,m_min=0.0_8
   real :: t_strt_equil, t_end_equil
@@ -108,13 +108,13 @@ integer, dimension(MPI_STATUS_SIZE)::status
     
     call zheevd('V','U', dim_clsh, hamiltonian, dim_clsh, egval, work, lwork, &
                                           rwork, lrwork, iwork, liwork, info)
-    
-    open(17,file='evali.dat',action='write',position='append')
-          do j=0,dim_h-1,1
-            write(17,21) j,egval(j)
-            21  format(I4,2X,ES22.8)
-          end do
-          close(17)
+    !print *,egval   
+!    open(17,file='evali.dat',action='write',position='append')
+!          do j=0,dim_h-1,1
+!!            write(17,21) j,egval(j)
+!            21  format(I4,2X,ES22.8)
+!          end do
+!          close(17)
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     go to 2000
@@ -465,13 +465,9 @@ end subroutine mcvar_init
 subroutine ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,mu, &
                       u_int,m,theta,phi,dim_h,ns_unit)
 implicit none
-  integer :: i,id0,id1,id2
-  integer :: s0l,s0ld 
-  integer :: s1r,s1d
-  integer :: s2u,s2ur
+  integer :: i,id0,id1,id2,id0n,id1n,id2n
   integer(8) :: L,ns_unit
   integer(8) :: n_sites
-  integer(8) :: ri,li,ui,di,rui,ldi
   integer(8) :: dim_h
   real(8) :: t_hopping,mu,u_int
   integer(8),dimension(0:n_sites-1) :: right,left,up,down,right_up,left_down
@@ -485,21 +481,14 @@ implicit none
 
   !! setting hopping dependent terms
   call  haminitinUnitcell(hamiltonian,ns_unit,n_sites,dim_h,right,left,up,down,t_hopping)
-  do i = 0,-1, 1
+  do i = 0,n_sites-1, 1
     !! sites in the unit cell
-    id0 = (ns_unit*i); id1 = (ns_unit*i)+1; id2 = (ns_unit*i)+2
-
-    !! neighbouring unit cell 
-    ri = right(i); li = left(i); ui = up(i); di = down(i); rui = right_up(i); ldi = left_down(i)
-
-    !! neighbour of site 0
-    s0l = (ns_unit*li) + 1 ; s0ld = (ns_unit*ldi)+2
-
-    !! neighbour of site 1 
-    s1r = (ns_unit*ri) ; s1d = (ns_unit*di + 2)
-
-    !! neighbour of site 2
-    s2u = (ns_unit*ui) + 1; s2ur = (ns_unit*rui)
+    id0 = (ns_unit*i) 
+    id0n = id0 + (ns_unit*n_sites)
+    id1 = (ns_unit*i)+1 
+    id1n = id1 + (ns_unit*n_sites)
+    id2 = (ns_unit*i)+2
+    id2n = id2 + (ns_unit*n_sites)
 
 
     !!! mx for three sites in the unit cell
@@ -523,22 +512,22 @@ implicit none
     hamiltonian(id2,id2) =  -(mu-0.5*u_int) - (0.5*u_int)*mz2
 
     !! for down spins
-    hamiltonian(id0+n_sites,id0+n_sites) =  -(mu-0.5*u_int) + (0.5*u_int)*mz0
-    hamiltonian(id1+n_sites,id1+n_sites) =  -(mu-0.5*u_int) + (0.5*u_int)*mz1
-    hamiltonian(id2+n_sites,id2+n_sites) =  -(mu-0.5*u_int) + (0.5*u_int)*mz2
+    hamiltonian(id0n,id0n) =  -(mu-0.5*u_int) + (0.5*u_int)*mz0
+    hamiltonian(id1n,id1n) =  -(mu-0.5*u_int) + (0.5*u_int)*mz1
+    hamiltonian(id2n,id2n) =  -(mu-0.5*u_int) + (0.5*u_int)*mz2
 
     ! setting the updn and dnup components for site 0 in the unit cell
-    hamiltonian(id0,id0+ns_unit*n_sites) = -(0.5*u_int)*cmplx(mx0,-my0)
-    hamiltonian(id0+ns_unit*n_sites,id0) = -(0.5*u_int)*cmplx(mx0,my0)
+    hamiltonian(id0,id0n) = -(0.5*u_int)*cmplx(mx0,-my0)
+    hamiltonian(id0n,id0) = -(0.5*u_int)*cmplx(mx0,my0)
 
 
     ! setting the updn and dnup components for site 1 in the unit cell
-    hamiltonian(id1,id1+ns_unit*n_sites) = -(0.5*u_int)*cmplx(mx1,-my1)
-    hamiltonian(id1+ns_unit*n_sites,id1) = -(0.5*u_int)*cmplx(mx1,my1)
+    hamiltonian(id1,id1n) = -(0.5*u_int)*cmplx(mx1,-my1)
+    hamiltonian(id1n,id1) = -(0.5*u_int)*cmplx(mx1,my1)
 
     ! setting the updn and dnup components for site 2 in the unit cell
-    hamiltonian(id2,id2+ns_unit*n_sites) = -(0.5*u_int)*cmplx(mx2,-my2)
-    hamiltonian(id2+ns_unit*n_sites,id2) = -(0.5*u_int)*cmplx(mx2,my2)
+    hamiltonian(id2,id2n) = -(0.5*u_int)*cmplx(mx2,-my2)
+    hamiltonian(id2n,id2) = -(0.5*u_int)*cmplx(mx2,my2)
 
   end do
   !print *,hamiltonian
@@ -636,7 +625,7 @@ subroutine haminitOutunitcell(right,left,up,down,hamiltonian,ns_unit,n_sites,t_h
     hamiltonian(si2,s2ur) = -t_hopping ; hamiltonian(si2n,s2urn) = -t_hopping
     hamiltonian(s2ur,si2) = -t_hopping ; hamiltonian(s2urn,si2n) = -t_hopping
 !    print *,si,si0,si1,si2
-    print *,si,si0,si0n,s0ln
+!    print *,si,si0,si0n,s0ln
   end do
 
 end subroutine
@@ -756,7 +745,7 @@ subroutine hamclsinitinUnitcell(ns_unit,hamil_cls,t_hopping,cls_dim,dim_clsh,cls
 
 
       nsi0 = ns_unit*si ; nsi1 = nsi0+1 ; nsi2 = nsi0+2
-      nsi0c = nsi0+cls_dim ; nsi1c = nsi1+cls_dim ;  nsi2c = nsi2+cls_dim
+      nsi0c = nsi0+(ns_unit*cls_dim) ; nsi1c = nsi1+(ns_unit*cls_dim) ;  nsi2c = nsi2+(ns_unit*cls_dim)
 
       !! 0--->1 & 0--->2 for spin up in the unit cell at si
       hamil_cls(nsi0,nsi1) = -t_hopping
