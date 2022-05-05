@@ -13,9 +13,9 @@ program ptca_repulsive
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
   integer(8),parameter :: ns_unit = 3
-  integer(8),parameter :: L = 4 !! system size
+  integer(8),parameter :: L = 20 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
-  integer(8),parameter :: cls_sites =  8 !! cluster size
+  integer(8),parameter :: cls_sites =  L !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
   integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
   integer(8),parameter :: split_sites = n_sites/n_splits
@@ -30,7 +30,7 @@ program ptca_repulsive
   real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
-  real(8),parameter :: u_int = 2.0
+  real(8),parameter :: u_int = 0.0
   real(8),parameter :: mu = 0.5*(u_int)
   real(8),parameter :: m_max=2.0_8,m_min=0.0_8
   real :: t_strt_equil, t_end_equil
@@ -39,7 +39,7 @@ program ptca_repulsive
   !!! this array will be initialized to -1 at the starting 
   !!! entry will be changed to 1 when that particular site is updated during mc
   integer(8),dimension(0:split_sites-1)::changed_ids,loc_ids
-
+  real(8),dimension(0:dim_h-1) :: egval
   !!!!!!!!!!!!!!!!!! initialize neighbour table !!!!!!!!!!!!!!!!!!!!!
   integer(8),dimension(0:n_sites-1)::sites
   integer(8),dimension(0:n_sites-1):: right,left,up,down,right_up,left_down
@@ -105,7 +105,16 @@ integer, dimension(MPI_STATUS_SIZE)::status
     
     call ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h,ns_unit)
-
+    
+    call zheevd('V','U', dim_clsh, hamiltonian, dim_clsh, egval, work, lwork, &
+                                          rwork, lrwork, iwork, liwork, info)
+    
+    open(17,file='evali.dat',action='write',position='append')
+          do j=0,dim_h-1,1
+            write(17,21) j,egval(j)
+            21  format(I4,2X,ES22.8)
+          end do
+          close(17)
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     go to 2000
@@ -164,33 +173,33 @@ integer, dimension(MPI_STATUS_SIZE)::status
           
           
           !!! transfer the new m,theta,phi,hamiltonian between all the processors
-          if (my_id==0) then
+       !   if (my_id==0) then
             !! loop over all the process and recieve the data into the root processes
-            do loc_proc=1,num_procs-1,1
-              call MPI_RECV(loc_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,11,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(m_loc,n_sites,MPI_DOUBLE_PRECISION,loc_proc,12,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,13,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,14,MPI_COMM_WORLD,status,ierr)
+       !     do loc_proc=1,num_procs-1,1
+       !       call MPI_RECV(loc_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,11,MPI_COMM_WORLD,status,ierr)
+       !       call MPI_RECV(m_loc,n_sites,MPI_DOUBLE_PRECISION,loc_proc,12,MPI_COMM_WORLD,status,ierr)
+       !       call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,13,MPI_COMM_WORLD,status,ierr)
+       !       call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,14,MPI_COMM_WORLD,status,ierr)
 
               !! loop over the loc_ids array and get the site index that is updated
-              do ki=0,split_sites-1,1
-                if (loc_ids(ki)>=0) then
-                  m(loc_ids(ki)) = m_loc(loc_ids(ki))
-                  theta(loc_ids(ki)) = loc_theta(loc_ids(ki))
-                  phi(loc_ids(ki)) = loc_phi(loc_ids(ki))
-                endif
-              enddo
-            end do
-          else
-              loc_ids = changed_ids
-              m_loc = m 
-              loc_theta = theta
-              loc_phi = phi
-              call MPI_SEND(loc_ids,split_sites,MPI_DOUBLE_PRECISION,0,11,MPI_COMM_WORLD,ierr)
-              call MPI_SEND(m_loc,n_sites,MPI_DOUBLE_PRECISION,0,12,MPI_COMM_WORLD,ierr)
-              call MPI_SEND(loc_theta,n_sites,MPI_DOUBLE_PRECISION,0,13,MPI_COMM_WORLD,ierr)
-              call MPI_SEND(loc_phi,n_sites,MPI_DOUBLE_PRECISION,0,14,MPI_COMM_WORLD,ierr)
-          end if
+       !       do ki=0,split_sites-1,1
+       !         if (loc_ids(ki)>=0) then
+       !           m(loc_ids(ki)) = m_loc(loc_ids(ki))
+       !           theta(loc_ids(ki)) = loc_theta(loc_ids(ki))
+       !           phi(loc_ids(ki)) = loc_phi(loc_ids(ki))
+       !         endif
+       !       enddo
+       !     end do
+       !   else
+        !      loc_ids = changed_ids
+        !      m_loc = m 
+         !     loc_theta = theta
+         !     loc_phi = phi
+          !    call MPI_SEND(loc_ids,split_sites,MPI_DOUBLE_PRECISION,0,11,MPI_COMM_WORLD,ierr)
+          !    call MPI_SEND(m_loc,n_sites,MPI_DOUBLE_PRECISION,0,12,MPI_COMM_WORLD,ierr)
+          !    call MPI_SEND(loc_theta,n_sites,MPI_DOUBLE_PRECISION,0,13,MPI_COMM_WORLD,ierr)
+          !    call MPI_SEND(loc_phi,n_sites,MPI_DOUBLE_PRECISION,0,14,MPI_COMM_WORLD,ierr)
+          !end if
 
           !! synchronize all the processes       
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -279,35 +288,35 @@ integer, dimension(MPI_STATUS_SIZE)::status
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
          
           !!! transfer the new m,theta,phi,hamiltonian between all the processors
-          if (my_id==0) then
+          !if (my_id==0) then
             !!! loop over all the processors and recieve the data from each one of them
-            do loc_proc=1,num_procs-1,1
-              call MPI_RECV(loc_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,28,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(m_loc,n_sites,MPI_DOUBLE_PRECISION,loc_proc,38,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,48,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,58,MPI_COMM_WORLD,status,ierr)
+          !  do loc_proc=1,num_procs-1,1
+          !    call MPI_RECV(loc_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,28,MPI_COMM_WORLD,status,ierr)
+          !    call MPI_RECV(m_loc,n_sites,MPI_DOUBLE_PRECISION,loc_proc,38,MPI_COMM_WORLD,status,ierr)
+          !    call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,48,MPI_COMM_WORLD,status,ierr)
+          !    call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,58,MPI_COMM_WORLD,status,ierr)
               
               !!! set the variables arrays in master using values from other slave processes
-              do ki=0,split_sites-1,1
-              if (loc_ids(ki)>=0) then
-                m(loc_ids(ki)) = m_loc(loc_ids(ki))
-                theta(loc_ids(ki)) = loc_theta(loc_ids(ki))
-                phi(loc_ids(ki)) = loc_phi(loc_ids(ki))               
-               endif
-              enddo
-            end do
+          !    do ki=0,split_sites-1,1
+          !    if (loc_ids(ki)>=0) then
+          !      m(loc_ids(ki)) = m_loc(loc_ids(ki))
+          !      theta(loc_ids(ki)) = loc_theta(loc_ids(ki))
+          !      phi(loc_ids(ki)) = loc_phi(loc_ids(ki))               
+          !     endif
+          !    enddo
+          !  end do
 
           !!! send the information about the site that is changed and the observables that are changed to the master
-          else 
-              loc_ids = changed_ids
-              m_loc = m 
-              loc_theta = theta
-              loc_phi = phi
-              call MPI_SEND(loc_ids,split_sites,MPI_DOUBLE_PRECISION,0,28,MPI_COMM_WORLD,ierr)
-              call MPI_SEND(m_loc,n_sites,MPI_DOUBLE_PRECISION,0,38,MPI_COMM_WORLD,ierr)
-              call MPI_SEND(loc_theta,n_sites,MPI_DOUBLE_PRECISION,0,48,MPI_COMM_WORLD,ierr)
-              call MPI_SEND(loc_phi,n_sites,MPI_DOUBLE_PRECISION,0,58,MPI_COMM_WORLD,ierr)
-            end if         
+          !else 
+          !    loc_ids = changed_ids
+          !    m_loc = m 
+           !   loc_theta = theta
+            !  loc_phi = phi
+           !   call MPI_SEND(loc_ids,split_sites,MPI_DOUBLE_PRECISION,0,28,MPI_COMM_WORLD,ierr)
+           !   call MPI_SEND(m_loc,n_sites,MPI_DOUBLE_PRECISION,0,38,MPI_COMM_WORLD,ierr)
+           !   call MPI_SEND(loc_theta,n_sites,MPI_DOUBLE_PRECISION,0,48,MPI_COMM_WORLD,ierr)
+           !   call MPI_SEND(loc_phi,n_sites,MPI_DOUBLE_PRECISION,0,58,MPI_COMM_WORLD,ierr)
+           ! end if         
           
           !!! synchronize all the processes 
           !!! send the updated m configurations
@@ -343,8 +352,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
           open(16,file=fname,action='write',position='append')
           do j=0,n_sites-1,1
-            write(16,20) i,j,m(j),theta(j),phi(j)
-            20  format(I4,2X,I4,2X,ES22.8,2X,ES22.8,2X,ES22.8)
+            write(16,20) i,j,m(0,j),m(1,j),m(2,j),theta(0,j),theta(1,j),theta(2,j),phi(0,j),phi(1,j),phi(2,j)
+            20  format(I4,2X,I4,2X,ES22.8,2X,ES22.8,2X,ES22.82X,ES22.8,2X,ES22.8,2X,ES22.82X,ES22.8,2X,ES22.8,2X,ES22.8)
           end do
           close(16)
         end if
@@ -427,7 +436,7 @@ implicit none
   real(8) :: m_min,m_max
   real(8):: rand3,rand1,rand2
   real(8) :: rand_int3,rand_int1,rand_int2
-  real(8),dimension(0,ns_unit,0:n_sites-1) :: m,theta,phi  
+  real(8),dimension(0:ns_unit,0:n_sites-1) :: m,theta,phi  
 
   do i = 0, n_sites-1, 1
     do j=0,ns_unit-1,1
@@ -475,9 +484,8 @@ implicit none
   hamiltonian(:,:) = cmplx(0.0,0.0)
 
   !! setting hopping dependent terms
-  call haminitinUnitcell(hamiltonian,ns_unit,n_sites,dim_h)
-
-  do i = 0,n_sites-1, 1
+  call  haminitinUnitcell(hamiltonian,ns_unit,n_sites,dim_h,right,left,up,down,t_hopping)
+  do i = 0,-1, 1
     !! sites in the unit cell
     id0 = (ns_unit*i); id1 = (ns_unit*i)+1; id2 = (ns_unit*i)+2
 
@@ -520,17 +528,17 @@ implicit none
     hamiltonian(id2+n_sites,id2+n_sites) =  -(mu-0.5*u_int) + (0.5*u_int)*mz2
 
     ! setting the updn and dnup components for site 0 in the unit cell
-    hamiltonian(id0,id0+n_sites) = -(0.5*u_int)*cmplx(mx0,-my0)
-    hamiltonian(id0+n_sites,id0) = -(0.5*u_int)*cmplx(mx0,my0)
+    hamiltonian(id0,id0+ns_unit*n_sites) = -(0.5*u_int)*cmplx(mx0,-my0)
+    hamiltonian(id0+ns_unit*n_sites,id0) = -(0.5*u_int)*cmplx(mx0,my0)
 
 
     ! setting the updn and dnup components for site 1 in the unit cell
-    hamiltonian(id1,id1+n_sites) = -(0.5*u_int)*cmplx(mx1,-my1)
-    hamiltonian(id1+n_sites,id1) = -(0.5*u_int)*cmplx(mx1,my1)
+    hamiltonian(id1,id1+ns_unit*n_sites) = -(0.5*u_int)*cmplx(mx1,-my1)
+    hamiltonian(id1+ns_unit*n_sites,id1) = -(0.5*u_int)*cmplx(mx1,my1)
 
     ! setting the updn and dnup components for site 2 in the unit cell
-    hamiltonian(id2,id2+n_sites) = -(0.5*u_int)*cmplx(mx2,-my2)
-    hamiltonian(id2+n_sites,id2) = -(0.5*u_int)*cmplx(mx2,my2)
+    hamiltonian(id2,id2+ns_unit*n_sites) = -(0.5*u_int)*cmplx(mx2,-my2)
+    hamiltonian(id2+ns_unit*n_sites,id2) = -(0.5*u_int)*cmplx(mx2,my2)
 
   end do
   !print *,hamiltonian
@@ -549,14 +557,13 @@ implicit none
   real(8) :: t_hopping 
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   
-  
   do i = 0,n_sites-1, 1
     id0 = (ns_unit*i) !! first site in the unit cell i
     id1 = (ns_unit*i)+ 1 !! second site in the unit cell i
     id2 = (ns_unit*i)+ 2  !! third site in the unit cell i
-    id0n = id0+n_sites  !! index for the spin down in unit cell i position 0
-    id1n = id1+n_sites  !! index for the spin down in unit cell i position 1
-    id2n = id2+n_sites  !! index for the spin down in unit cell i position 2
+    id0n = id0+(ns_unit*n_sites)  !! index for the spin down in unit cell i position 0
+    id1n = id1+(ns_unit*n_sites)  !! index for the spin down in unit cell i position 1
+    id2n = id2+(ns_unit*n_sites)  !! index for the spin down in unit cell i position 2
     
     !!! hopping from site 0-->1 & 0--->2 for up and down spin
     hamiltonian(id0,id1) = -t_hopping; hamiltonian(id0n,id1n) = -t_hopping
@@ -569,8 +576,10 @@ implicit none
     ! conjugate hopping from 2-->0 and 2--->1 for up and down spin
     hamiltonian(id2,id0) = -t_hopping; hamiltonian(id2n,id0n) = -t_hopping
     hamiltonian(id2,id1) = -t_hopping; hamiltonian(id2n,id1n) = -t_hopping
+    !print *,i,id0,id1,id2,id0n,id1n,id2n
+  
   end do
-call haminitOutunitcell(right,left,up,down,hamiltonian,ns_unit,n_sites,t_hopping,site,dim_h)
+call haminitOutunitcell(right,left,up,down,hamiltonian,ns_unit,n_sites,t_hopping,dim_h)
 end subroutine haminitinUnitcell
 !!-----------------------------------------------------------------------------!!
 
@@ -579,7 +588,8 @@ end subroutine haminitinUnitcell
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! initializing the hamiltonian for the hopping for sites within the outsite
 subroutine haminitOutunitcell(right,left,up,down,hamiltonian,ns_unit,n_sites,t_hopping,dim_h)
-  integer(8) :: ns_unit,n_sites,site,dim_h
+  implicit none
+  integer(8) :: ns_unit,n_sites,dim_h
   integer :: si 
   integer :: si0, s0l, s0ld, si0n, s0ln, s0ldn ! sites related to 0 site in the unit cell 
   integer :: si1, s1r, s1d, si1n, s1rn, s1dn ! sites related to site 1 in the unit cell
@@ -588,23 +598,22 @@ subroutine haminitOutunitcell(right,left,up,down,hamiltonian,ns_unit,n_sites,t_h
   integer(8),dimension(0:n_sites-1) :: right,left,up,down
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   
-
   do si=0,n_sites-1,1  
     !! 1st site in the unit cell and site it's connected to 2nd and 3rd site of other unit cell
     si0 = ns_unit*si 
     s0l = left(si) * ns_unit + 1 ; s0ld = left(down(si))*ns_unit + 2
-    si0n = si0+n_sites ; s0ln = s0l+n_sites ; s0ldn = s0ld+n_sites
+    si0n = si0+(ns_unit*n_sites) ; s0ln = s0l+(ns_unit*n_sites) ; s0ldn = s0ld+(ns_unit*n_sites)
 
     !! 2nd site in the unit cell is connected to 1st and 3rd site in the other unit cell
     si1 = (ns_unit*si)+1 
     s1r = right(si) * ns_unit ; s1d = ns_unit*down(si) + 2
-    si1n = si1+n_sites; s1rn = s1r+n_sites;s1dn = s1d+n_sites
+    si1n = si1+(ns_unit*n_sites); s1rn = s1r+(ns_unit*n_sites);s1dn = s1d+(ns_unit*n_sites)
 
     !! 3rd site in the unit cell is connected to 1st site of unit cell in up and 0 site 
     !! of unit cell in up right direction
     si2 = (ns_unit*si)+2
-    s2u = (up(site)*ns_unit)+1 ; s2ur = right(up(i))*ns_unit 
-    si2n = si2+n_sites; s2un  = s2u + n_sites ; s2urn = s2ur+n_sites
+    s2u = (up(si)*ns_unit)+1 ; s2ur = right(up(si))*ns_unit 
+    si2n = si2+(ns_unit*n_sites); s2un  = s2u + (ns_unit*n_sites) ; s2urn = s2ur+(ns_unit*n_sites)
 
     !! matrix element between 0 site and neighbour for up and down spins
     hamiltonian(si0,s0l) = -t_hopping ; hamiltonian(si0n,s0ln) = -t_hopping
@@ -626,7 +635,8 @@ subroutine haminitOutunitcell(right,left,up,down,hamiltonian,ns_unit,n_sites,t_h
 
     hamiltonian(si2,s2ur) = -t_hopping ; hamiltonian(si2n,s2urn) = -t_hopping
     hamiltonian(s2ur,si2) = -t_hopping ; hamiltonian(s2urn,si2n) = -t_hopping
-  
+!    print *,si,si0,si1,si2
+    print *,si,si0,si0n,s0ln
   end do
 
 end subroutine
@@ -640,12 +650,16 @@ subroutine cluster_ham(site_clster,L,n_sites,cls_sites, hamil_cls,cls_dim,&
                         t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
 implicit none
   integer(8) :: cls_dim,L, cls_sites,n_sites,ns_unit
-  integer(8) :: i,si,x,y,xip,yip
+  integer(8) :: i,si,x,y,xip,yip,xim,yim
   integer :: sri,sui ! for the nn hopping
   integer(8) :: site_clster ! site that has the variable that will be changed
   integer(8) :: dim_h,dim_clsh
+  integer(8) :: sli,sdi,sild,siru
+  integer(8) :: sic, sicn , clsi,clsin
+  integer(8) :: sic1 , sicn1 , clsi1 , clsin1 
+  integer(8) :: sic2 , sicn2 , clsi2 , clsin2 
+  integer(8),dimension(0:n_sites-1) :: right,left,up,down 
   real(8) :: t_hopping ! hopping strength
-
   !! arrays with all sites and the sites in the cluster
   integer(8),dimension(0:n_sites-1,0:cls_dim-1) :: cl_st
 
@@ -719,7 +733,7 @@ implicit none
       !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
     end do
     call hamclsinitinUnitcell(ns_unit,hamil_cls,t_hopping,cls_dim,dim_clsh,cls_sites)
-    call hamclsinitOutunitcell(right,left,up,down,hamil_cls,site,ns_unit,n_sites,t_hopping,site,dim_clsh)
+    call hamclsinitOutunitcell(right,left,up,down,hamil_cls,ns_unit,n_sites,t_hopping,dim_clsh,cls_dim)
 !! uncomment to see the site and neighbour
 !    print *,'ri',right_cls
 !    print *,'ui',up_cls
@@ -776,16 +790,17 @@ end subroutine hamclsinitinUnitcell
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! this subroutine will initialize the hamiltonian for the bonds outside the unit cell
-subroutine hamclsinitOutunitcell(right,left,up,down,hamil_cls,si,ns_unit,n_sites,t_hopping,site,dim_clsh)
+subroutine hamclsinitOutunitcell(right,left,up,down,hamil_cls,ns_unit,n_sites,t_hopping,dim_clsh,cls_dim)
   implicit none
   integer :: si,i,x,y  
   integer(8) :: si0 , s0l , s0ld , si0n , s0ln , s0ldn
   integer(8) :: si1, s1r , s1d , si1n , s1rn , s1dn
   integer(8) :: si2 , s2u ,s2ur , si2n , s2un , s2urn
   integer(8) :: ns_unit,n_sites,dim_clsh,cls_sites
+  integer :: cls_dim
   real(8) :: t_hopping
   integer(8),dimension(0:n_sites-1) :: right,left,up,down
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: dim_clsh
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls
   
    do i = 0, cls_dim-1, 1
       x = mod(i,cls_sites) ! x index in the  site cluster x --> [0,1,cls_sites-1]
@@ -799,15 +814,15 @@ subroutine hamclsinitOutunitcell(right,left,up,down,hamil_cls,si,ns_unit,n_sites
       s0ld = left(down(si))*ns_unit + 2 ; s0ldn = s0ld + n_sites
 
       !! 2nd site in the unit cell is connected to 1st and 3rd site in the other unit cell
-      si1 = (ns_unit*site)+1 ; si1n = si1 + n_sites
+      si1 = (ns_unit*si)+1 ; si1n = si1 + n_sites
       s1r = right(si) * ns_unit ; s1rn = s1r + n_sites
       s1d = ns_unit*down(si) + 2 ; s1dn = s1d + n_sites
 
       !! 3rd site in the unit cell is connected to 1st site of unit cell in up and 0 site 
       !! of unit cell in up right direction
-      si2 = (ns_unit*site)+2 ; si2n = si2 + n_sites
-      s2u = (up(site)*ns_unit)+1 ; s2un = s2u + n_sites
-      s2ur = right(up(i))*ns_unit ; s2urn = s2ur + n_sites
+      si2 = (ns_unit*si)+2 ; si2n = si2 + n_sites
+      s2u = (up(si)*ns_unit)+1 ; s2un = s2u + n_sites
+      s2ur = right(up(si))*ns_unit ; s2urn = s2ur + n_sites
 
       !! matrix element between 0 site and neighbour
       hamil_cls(si0,s0l) = -t_hopping ; hamil_cls(si0n,s0ln) = -t_hopping
@@ -944,7 +959,7 @@ end subroutine lattice_splt
 subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
      cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max)
 !implicit none
-  integer(8) :: dim_h,dim_clsh,n_sites,site_clster,cls_dim
+  integer(8) :: dim_h,dim_clsh,n_sites,site_clster,cls_dim,ns_unit
   integer(8) :: loc_site !! local site that is being flipped
   integer(8) :: info
   integer(8) :: lwork,lrwork,liwork
@@ -969,15 +984,15 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: temp_clsham
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
-  real(8),dimension(0:ns_unit,0:n_sites-1) :: m,theta,phi
-  real(8),dimension(0:ns_unit,0:n_sites-1) :: loc_m
-  real(8),dimension(0:ns_unit,0:dim_clsh-1) :: egval
+  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi
+  real(8),dimension(0:2,0:n_sites-1) :: loc_m
+  real(8),dimension(0:dim_clsh-1) :: egval
   
   complex(8),dimension(lwork)::work
   real(8),dimension(lrwork) :: rwork
   integer(8),dimension(liwork)::iwork
 
-  loc_m(:) = 0
+  loc_m(:,:) = 0
   beta = 1./tvar
   ! position of global site in the cluster (center)
   loc_site = int((0.5*cls_sites)+cls_sites*(0.5*cls_sites))
@@ -1060,7 +1075,7 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   !! and m configurations
 
   temp_clsham(:,:)  =  hamil_cls(:,:)
-  loc_m(:) = m(:)
+  loc_m(:,:) = m(:,:)
   
   egval(:)=0
   call zheevd('V','U', dim_clsh, temp_clsham, dim_clsh, egval, work, lwork, &
@@ -1096,9 +1111,9 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
 
 
   info = 10
-  loc_m(site_clster*ns_unit) = tempm0
-  loc_m((site_clster*ns_unit)+1) = tempm1
-  loc_m((site_clster*ns_unit)+2) = tempm2 
+  loc_m(0,ns_unit*site_clster) = tempm0
+  loc_m(1,(site_clster*ns_unit)+1) = tempm1
+  loc_m(2,(site_clster*ns_unit)+2) = tempm2 
   
   !! diagonalize the updated cluster hamiltonian
   
@@ -1114,17 +1129,17 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   !print *,site_clster
   if ( delE <0.0 ) then
     !! setting up the mc variables
-      m(site_clster*ns_unit) = tempm0 !! update the mc variable if energy is reduced  for the 1st site in the unit cell
-      theta(site_clster*ns_unit) = temptheta0
-      phi(site_clster*ns_unit) = tempphi0
+      m(0,site_clster*ns_unit) = tempm0 !! update the mc variable if energy is reduced  for the 1st site in the unit cell
+      theta(0,site_clster*ns_unit) = temptheta0
+      phi(0,site_clster*ns_unit) = tempphi0
 
-      m(site_clster*ns_unit+1) = tempm1 !! update the mc variable if energy is reduced  for the 2nd site in the unit cell
-      theta(site_clster*ns_unit+1) = temptheta1
-      phi(site_clster*ns_unit+1) = tempphi1
+      m(1,site_clster*ns_unit+1) = tempm1 !! update the mc variable if energy is reduced  for the 2nd site in the unit cell
+      theta(1,site_clster*ns_unit+1) = temptheta1
+      phi(1,site_clster*ns_unit+1) = tempphi1
 
-      m(site_clster*ns_unit+2) = tempm2 !! update the mc variable if energy is reduced  for the 3rd site in the unit cell
-      theta(site_clster*ns_unit+2) = temptheta2
-      phi(site_clster*ns_unit+2) = tempphi2
+      m(2,site_clster*ns_unit+2) = tempm2 !! update the mc variable if energy is reduced  for the 3rd site in the unit cell
+      theta(2,site_clster*ns_unit+2) = temptheta2
+      phi(2,site_clster*ns_unit+2) = tempphi2
 
       !!!! interaction term for the 1st site in the unit cell
       hamiltonian(site_clster*ns_unit,site_clster*ns_unit) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz0
@@ -1155,17 +1170,17 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
      call random_number(mc_prob)
      if(mc_prob < exp(-beta*delE)) then
         
-      m(site_clster*ns_unit) = tempm0 !! update the mc variable if energy is reduced  for the 1st site in the unit cell
-      theta(site_clster*ns_unit) = temptheta0
-      phi(site_clster*ns_unit) = tempphi0
+      m(0,site_clster*ns_unit) = tempm0 !! update the mc variable if energy is reduced  for the 1st site in the unit cell
+      theta(0,site_clster*ns_unit) = temptheta0
+      phi(0,site_clster*ns_unit) = tempphi0
 
-      m(site_clster*ns_unit+1) = tempm1 !! update the mc variable if energy is reduced  for the 2nd site in the unit cell
-      theta(site_clster*ns_unit+1) = temptheta1
-      phi(site_clster*ns_unit+1) = tempphi1
+      m(1,site_clster*ns_unit+1) = tempm1 !! update the mc variable if energy is reduced  for the 2nd site in the unit cell
+      theta(1,site_clster*ns_unit+1) = temptheta1
+      phi(1,site_clster*ns_unit+1) = tempphi1
 
-      m(site_clster*ns_unit+2) = tempm2 !! update the mc variable if energy is reduced  for the 3rd site in the unit cell
-      theta(site_clster*ns_unit+2) = temptheta2
-      phi(site_clster*ns_unit+2) = tempphi2
+      m(2,site_clster*ns_unit+2) = tempm2 !! update the mc variable if energy is reduced  for the 3rd site in the unit cell
+      theta(2,site_clster*ns_unit+2) = temptheta2
+      phi(2,site_clster*ns_unit+2) = tempphi2
 
       !!!! interaction term for the 1st site in the unit cell
       hamiltonian(site_clster*ns_unit,site_clster*ns_unit) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz0
