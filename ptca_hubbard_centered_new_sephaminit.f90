@@ -989,73 +989,14 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   !! generating uniform random numbers (new mc variables)
   !print *,'lcs',i,cls_sites,loc_site,site_clster
   
-    
-  call random_number(rand1)
-  call random_number(rand2)
-  call random_number(rand3)
-  !! temp m
-  rand_int1=rand1*5000
-  tempm0=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
+  si = 0 
+  call mcsweepUnitCell(m_min,m_max,loc_site,dim_clsh,ns_unit,mu,u_int,si)
+  si = 1
+  call mcsweepUnitCell(m_min,m_max,loc_site,dim_clsh,ns_unit,mu,u_int,si)
+  si = 2
+  call mcsweepUnitCell(m_min,m_max,loc_site,dim_clsh,ns_unit,mu,u_int,si)
   
-  !! temp theta
-  rand_int2=rand2*1000
-  temptheta0=acos(-1.0_8+(rand_int2/500.0))
-  
-  !! temp phi
-  rand_int3=rand3*2000
-  tempphi0=(2.0_8*pi)*(rand_int3/2000.0)
-  
-
-  !! value of mx,my,mz
-  tempmx0 = tempm0 * cos(tempphi0) * sin(temptheta0)
-  tempmy0 = tempm0 * sin(tempphi0) * sin(temptheta0)
-  tempmz0 = tempm0 * cos(temptheta0)
-    
-  !!! monte carlo variable for the second site in the unit cell
-  call random_number(rand1)
-  call random_number(rand2)
-  call random_number(rand3)
-  !! temp m
-  rand_int1=rand1*5000
-  tempm1=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
-  
-  !! temp theta
-  rand_int2=rand2*1000
-  temptheta1=acos(-1.0_8+(rand_int2/500.0))
-  
-  !! temp phi
-  rand_int3=rand3*2000
-  tempphi1=(2.0_8*pi)*(rand_int3/2000.0)
-  
-
-  !! value of mx,my,mz
-  tempmx1 = tempm1 * cos(tempphi1) * sin(temptheta1)
-  tempmy1 = tempm1 * sin(tempphi1) * sin(temptheta1)
-  tempmz1 = tempm1 * cos(temptheta1)
-    
-  !!! monte carlo variables for the third site in the unit cell
-  call random_number(rand1)
-  call random_number(rand2)
-  call random_number(rand3)
-  !! temp m
-  rand_int1=rand1*5000
-  tempm2=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
-  
-  !! temp theta
-  rand_int2=rand2*1000
-  temptheta2=acos(-1.0_8+(rand_int2/500.0))
-  
-  !! temp phi
-  rand_int3=rand3*2000
-  tempphi2=(2.0_8*pi)*(rand_int3/2000.0)
-  
-
-  !! value of mx,my,mz
-  tempmx2 = tempm2 * cos(tempphi2) * sin(temptheta2)
-  tempmy2 = tempm2 * sin(tempphi2) * sin(temptheta2)
-  tempmz2 = tempm2 * cos(temptheta2)
-
-
+  !!separate subroutine for cluster monte carlo
 !  print *,site_clster,tempmx,tempmy,tempmz,loc_site
 
   info = 10
@@ -1205,16 +1146,125 @@ end subroutine mc_sweep
 !! --------------  monte carlo sweep for the unit cell------------------------!!
 !! ---------------------------------------------------------------------------!!
 
-subroutine mcsweepUnitCell()
+subroutine mcsweepUnitCell(m_min,m_max,loc_site,dim_clsh,ns_unit,mu,u_int,si,cls_dim)
 implicit none
+  
+  integer(8) :: dim_h,dim_clsh,n_sites,site_clster,cls_dim,ns_unit
+  integer(8) :: loc_site !! local site that is being flipped
+  integer(8) :: info
+  integer(8) :: lwork,lrwork,liwork
+  integer(8) :: cls_sites
+  real(8) :: mu, u_int
+  real(8) :: pi,beta,e_u,e_v,enr_loc
+  real(8)  :: tvar
+  real(8) :: m_min,m_max,mc_prob
+  integer(8), dimension(0:n_sites-1,0:cls_dim-1)::cl_st ! sites in the cluster at site j
+ 
+  !!! variables for the monte carlo procedure
+  real(8) :: mx,my,mz ! to store initial value of mx,my,mz 
+  real(8) :: rand1, rand2 , rand3 ! random number to generate,m,theta,phi
+  real(8) :: rand_int1,rand_int2, rand_int3
+  real(8) :: delE,tempm,temptheta,tempphi !! store temp value of m,theta,phi for site 0
+ 
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls ! cluster hamiltonian
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: temp_clsham !! to store a copy of the cluster hamiltonian 
+  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original hamiltonian
+  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi  !! m , theta , phi array
+  real(8),dimension(0:2,0:n_sites-1) :: loc_m  !! local m array
+  real(8),dimension(0:dim_clsh-1) :: egval !! eigenvalue array
+  
+  complex(8),dimension(lwork)::work
+  real(8),dimension(lrwork) :: rwork
+  integer(8),dimension(liwork)::iwork
+  
+  
+  call random_number(rand1)
+  call random_number(rand2)
+  call random_number(rand3)
+  
+  !! temp m
+  rand_int1=rand1*5000
+  tempm=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
+  
+  !! temp theta
+  rand_int2=rand2*1000
+  temptheta=acos(-1.0_8+(rand_int2/500.0))
+  
+  !! temp phi
+  rand_int3=rand3*2000
+  tempphi=(2.0_8*pi)*(rand_int3/2000.0)
 
+  mx = tempm * cos(tempphi) * sin(temptheta)
+  my = tempm * sin(tempphi) * sin(temptheta)
+  mz = tempm * cos(temptheta)
+  
+  temp_clsham(:,:)  = hamil_cls(:,:)
+  loc_m(:,:) = m(:,:)
+  info  = 10
+  !!! call diagonalization subroutine
+  call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
+                                           rwork, lrwork, iwork, liwork, info)
+  
+  !!! call subroutine to calculate the energy
+  call enr_calc(egval,dim_clsh,loc_m,n_sites,cl_st,cls_dim,enr_loc,site_clster,tvar,u_int)
+  e_u = enr_loc
+  
+  !! pick a site to update the monte carlo variable
+  si = loc_site * ns_unit ; sic = si + (ns_unit*cls_dim)
 
+  hamil_cls(si,si) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
+  hamil_cls(sic,sic) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+
+  hamil_cls(si,sic) =  -(0.5*u_int)*cmplx(mx,-my)
+  hamil_cls(sic,si) = -(0.5*u_int)*cmplx(mx,my)
+  
+  loc_m(si,loc_site*ns_unit) = tempm
+  
+
+  !!! call diagonalization subroutine
+  call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
+                                           rwork, lrwork, iwork, liwork, info)
+  
+  !!! call subroutine to calculate the energy
+  call enr_calc(egval,dim_clsh,loc_m,n_sites,cl_st,cls_dim,enr_loc,site_clster,tvar,u_int)
+  e_v = enr_loc
+
+  !! calculate the energy difference
+  delE = e_v - e_u
+  sic = si + (ns_unit*site_clster) ; sicn = sic+(n_sites*ns_unit)
+  if (delE < 0.0) then
+    m(si,sic) = tempm  !! update m 
+    theta(si,sic) = temptheta !! update theta
+    phi(si,sic) = tempphi  !! update phi
+ 
+    !! update the hamiltonian matrix element for sic,sicn for spin up and spin down
+    hamiltonian(sic,sic) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
+    hamiltonian(sicn,sicn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+
+    !! update the hamiltonian for updn and dnup element for site sic
+    hamiltonian(sic,sicn) = -(0.5*u_int)*cmplx(mx,-my)
+    hamiltonian(sicn,sic) = -(0.5*u_int)*cmplx(mx,my)
+
+  else 
+    !! if the energy is not lowered update the site with the probability exp(-beta*delE)
+    call random_number(mc_prob)
+    
+    if (mc_prob < exp(-beta*delE)) then
+        m(si,sic) = tempm !! update m 
+        theta(si,sic) = temptheta !! update theta
+        phi(si,sic) = tempphi !! update phi
+ 
+        hamiltonian(sic,sic) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
+        hamiltonian(sicn,sicn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+
+        hamiltonian(sic,sicn) = -(0.5*u_int)*cmplx(mx,-my)
+        hamiltonian(sicn,sic) = -(0.5*u_int)*cmplx(mx,my)
+    end if
+  end if
 end subroutine mcsweepUnitCell
-
-
-
-
 !! ---------------------------------------------------------------------------!!
+
+
 
 
 !! ---------------------------------------------------------------------------!!
