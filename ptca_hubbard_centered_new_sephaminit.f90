@@ -728,6 +728,8 @@ implicit none
 !    print *,'ui',up_cls
 
 end subroutine cluster_ham
+
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine hamclsinitinUnitcell(ns_unit,hamil_cls,t_hopping,cls_dim,dim_clsh,cls_sites)
   implicit none
@@ -1018,32 +1020,6 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   si2 = (loc_site * ns_unit) + 2 ; si2c = si2 + (ns_unit * cls_dim)
 
 
-  !! updating the diagonal part of the matrix, upup & dndn for the 1st site
-  hamil_cls(si0,si0) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz0
-  hamil_cls(si0c,si0c) = -(mu-0.5*u_int) + (0.5*u_int)*tempmz0
-
-  !! updating the blocks updn & dnup for the 1st site
-  hamil_cls(si0,si0c) = -(0.5*u_int)*cmplx(tempmx0,-tempmy0)
-  hamil_cls(si0c,si0) = -(0.5*u_int)*cmplx(tempmx0,tempmy0)
-
-
-  !! updating the diagonal part of the matrix, upup & dndn for the 2nd site
-  hamil_cls(si1,si1) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz1
-  hamil_cls(si1c,si1c) = -(mu-0.5*u_int) + (0.5*u_int)*tempmz1
-
-  !! updating the blocks updn & dnup for the 1st site
-  hamil_cls(si1,si1c) = -(0.5*u_int)*cmplx(tempmx1,-tempmy1)
-  hamil_cls(si1c,si1) = -(0.5*u_int)*cmplx(tempmx1,tempmy1)
-
-
-  !! updating the diagonal part of the matrix, upup & dndn for the 3rd site
-  hamil_cls(si2,si2) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz2
-  hamil_cls(si2c,si2c) = -(mu-0.5*u_int) + (0.5*u_int)*tempmz2
-
-  !! updating the blocks updn & dnup for the 1st site
-  hamil_cls(si2,si2c) = -(0.5*u_int)*cmplx(tempmx2,-tempmy2)
-  hamil_cls(si2c,si2) = -(0.5*u_int)*cmplx(tempmx2,tempmy2)
-
 
   info = 10
   loc_m(0,ns_unit*site_clster) = tempm0
@@ -1064,18 +1040,7 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   !print *,site_clster
   if ( delE <0.0 ) then
     !! setting up the mc variables
-      m(0,site_clster*ns_unit) = tempm0 !! update the mc variable if energy is reduced  for the 1st site in the unit cell
-      theta(0,site_clster*ns_unit) = temptheta0
-      phi(0,site_clster*ns_unit) = tempphi0
-
-      m(1,site_clster*ns_unit+1) = tempm1 !! update the mc variable if energy is reduced  for the 2nd site in the unit cell
-      theta(1,site_clster*ns_unit+1) = temptheta1
-      phi(1,site_clster*ns_unit+1) = tempphi1
-
-      m(2,site_clster*ns_unit+2) = tempm2 !! update the mc variable if energy is reduced  for the 3rd site in the unit cell
-      theta(2,site_clster*ns_unit+2) = temptheta2
-      phi(2,site_clster*ns_unit+2) = tempphi2
-
+      
       !!!! interaction term for the 1st site in the unit cell
       hamiltonian(site_clster*ns_unit,site_clster*ns_unit) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz0
       hamiltonian((site_clster*ns_unit)+n_sites,(site_clster*ns_unit)+n_sites) = -(mu - 0.5*u_int) +  (0.5*u_int)*tempmz0
@@ -1218,7 +1183,7 @@ implicit none
   hamil_cls(si,sic) =  -(0.5*u_int)*cmplx(mx,-my)
   hamil_cls(sic,si) = -(0.5*u_int)*cmplx(mx,my)
   
-  loc_m(si,loc_site*ns_unit) = tempm
+  loc_m(si,site_clster*ns_unit) = tempm
   
 
   !!! call diagonalization subroutine
@@ -1233,9 +1198,9 @@ implicit none
   delE = e_v - e_u
   sic = si + (ns_unit*site_clster) ; sicn = sic+(n_sites*ns_unit)
   if (delE < 0.0) then
-    m(si,sic) = tempm  !! update m 
-    theta(si,sic) = temptheta !! update theta
-    phi(si,sic) = tempphi  !! update phi
+    m(si,site_clster) = tempm  !! update m 
+    theta(si,site_clster) = temptheta !! update theta
+    phi(si,site_clster) = tempphi  !! update phi
  
     !! update the hamiltonian matrix element for sic,sicn for spin up and spin down
     hamiltonian(sic,sic) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
@@ -1250,10 +1215,10 @@ implicit none
     call random_number(mc_prob)
     
     if (mc_prob < exp(-beta*delE)) then
-        m(si,sic) = tempm !! update m 
-        theta(si,sic) = temptheta !! update theta
-        phi(si,sic) = tempphi !! update phi
- 
+        m(si,site_clster) = tempm  !! update m 
+        theta(si,site_clster) = temptheta !! update theta
+        phi(si,site_clster) = tempphi  !! update phi
+        
         hamiltonian(sic,sic) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
         hamiltonian(sicn,sicn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
 
