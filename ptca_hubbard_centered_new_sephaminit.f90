@@ -30,7 +30,7 @@ program ptca_repulsive
   real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
-  real(8),parameter :: u_int = 2.0
+  real(8),parameter :: u_int = 0.0
   real(8),parameter :: mu = 0.5*(u_int)
   real(8),parameter :: m_max=2.0_8,m_min=0.0_8
   real :: t_strt_equil, t_end_equil
@@ -117,7 +117,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
 !          close(17)
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-    go to 2000
+
     !! subroutine to initialize the arrays with sites splits in 4 subgroup 
     call cluster_sites(cls_sites,L,n_sites,cl_st,cls_dim)
 
@@ -381,7 +381,6 @@ integer, dimension(MPI_STATUS_SIZE)::status
       !!! lower the temperature of the system
       tvar = tvar-dtemp
     end do
-  2000 continue
 
   call MPI_BARRIER(MPI_COMM_WORLD,ierr)
   call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -961,149 +960,36 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   real(8) :: m_min,m_max,mc_prob
   integer(8), dimension(0:n_sites-1,0:cls_dim-1)::cl_st ! sites in the cluster at site j
  
-  !!! variables for the monte carlo procedure
-  real(8) :: tempmx0,tempmy0,tempmz0 ! to store initial value of mx,my,mz site 0
-  real(8) :: tempmx1,tempmy1,tempmz1 ! to store initial value of mx,my,mz site 1
-  real(8) :: tempmx2,tempmy2,tempmz2 ! to store initial value of mx,my,mz site 2
-
-  real(8) :: rand1, rand2 , rand3 ! random number to generate,m,theta,phi
-  real(8) :: rand_int1,rand_int2, rand_int3
-  real(8) :: delE,tempm0,temptheta0,tempphi0 !! store temp value of m,theta,phi for site 0
-  real(8) :: tempm1,temptheta1,tempphi1 !! store temp value of m,theta,phi for site 1
-  real(8) :: tempm2,temptheta2,tempphi2 !! store temp value of m,theta,phi for site 2
- 
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls ! cluster hamiltonian
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: temp_clsham !! to store a copy of the cluster hamiltonian 
-  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original hamiltonian
+  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original full hamiltonian
   real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi  !! m , theta , phi array
-  real(8),dimension(0:2,0:n_sites-1) :: loc_m  !! local m array
   real(8),dimension(0:dim_clsh-1) :: egval !! eigenvalue array
   
   complex(8),dimension(lwork)::work
   real(8),dimension(lrwork) :: rwork
   integer(8),dimension(liwork)::iwork
 
-  loc_m(:,:) = 0  ! initialize all entries to zero
   beta = 1./tvar
+
   ! position of global site in the cluster (center)
   loc_site = int((0.5*cls_sites)+cls_sites*(0.5*cls_sites))
-!  print *,'loc',loc_site,site_clster
-  !! generating uniform random numbers (new mc variables)
-  !print *,'lcs',i,cls_sites,loc_site,site_clster
-  
+ 
+  !!! updating first site in the unit cell
   si = 0 
-  call mcsweepUnitCell(m_min,m_max,loc_site,dim_clsh,ns_unit,mu,u_int,si)
-  si = 1
-  call mcsweepUnitCell(m_min,m_max,loc_site,dim_clsh,ns_unit,mu,u_int,si)
+  call mcsweepUnitCell(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si)
+  
+  !!! trying to update the second site in the unit cell
+  si = 1 
+  call mcsweepUnitCell(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si)
+  
+  !!! trying to update the third site in the unit cell
   si = 2
-  call mcsweepUnitCell(m_min,m_max,loc_site,dim_clsh,ns_unit,mu,u_int,si)
-  
-  !!separate subroutine for cluster monte carlo
-!  print *,site_clster,tempmx,tempmy,tempmz,loc_site
-
-  info = 10
-  !print *,'tca_site',loc_site,'lattice_site',site_clster
-  !! diagonalize old cluster hamiltonian but before that copy the copy of the hamiltonian
-  !! and m configurations
-
-  temp_clsham(:,:)  =  hamil_cls(:,:)
-  loc_m(:,:) = m(:,:)
-  
-  egval(:)=0
-  call zheevd('V','U', dim_clsh, temp_clsham, dim_clsh, egval, work, lwork, &
-                                          rwork, lrwork, iwork, liwork, info)
-  call enr_calc(egval,dim_clsh,loc_m,n_sites,cl_st,cls_dim,enr_loc,site_clster,tvar,u_int)
-  e_u = enr_loc
-  
-  si0 = loc_site * ns_unit  ; si0c = si0 + (ns_unit*cls_dim)
-  si1 = (loc_site * ns_unit) + 1 ; si1c  = si1 + (ns_unit * cls_dim)
-  si2 = (loc_site * ns_unit) + 2 ; si2c = si2 + (ns_unit * cls_dim)
-
-
-
-  info = 10
-  loc_m(0,ns_unit*site_clster) = tempm0
-  loc_m(1,(site_clster*ns_unit)+1) = tempm1
-  loc_m(2,(site_clster*ns_unit)+2) = tempm2 
-  
-  !! diagonalize the updated cluster hamiltonian
-  
-  egval(:)=0
-  call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
-                                           rwork, lrwork, iwork, liwork, info)
+  call mcsweepUnitCell(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si)
   
 
-  call enr_calc(egval,dim_clsh,loc_m,n_sites,cl_st,cls_dim,enr_loc,site_clster,tvar,u_int)
-  e_v = enr_loc
-  
-  delE = e_v - e_u
-  !print *,site_clster
-  if ( delE <0.0 ) then
-    !! setting up the mc variables
-      
-      !!!! interaction term for the 1st site in the unit cell
-      hamiltonian(site_clster*ns_unit,site_clster*ns_unit) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz0
-      hamiltonian((site_clster*ns_unit)+n_sites,(site_clster*ns_unit)+n_sites) = -(mu - 0.5*u_int) +  (0.5*u_int)*tempmz0
-
-      hamiltonian(site_clster*ns_unit,(site_clster*ns_unit)+n_sites) =   -(0.5*u_int)*cmplx(tempmx0,-tempmy0)
-      hamiltonian((site_clster*ns_unit)+n_sites,site_clster*ns_unit) =  -(0.5*u_int)*cmplx(tempmx0,tempmy0)
-  
-
-
-      !!!! interaction term for the 2nd site in the unit cell
-      hamiltonian((site_clster*ns_unit)+1,(site_clster*ns_unit)+1) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz1
-      hamiltonian((site_clster*ns_unit)+n_sites,(site_clster*ns_unit)+n_sites) = -(mu - 0.5*u_int) +  (0.5*u_int)*tempmz1
-
-      hamiltonian((site_clster*ns_unit)+1,(site_clster*ns_unit)+n_sites+1) =   -(0.5*u_int)*cmplx(tempmx1,-tempmy1)
-      hamiltonian((site_clster*ns_unit)+1+n_sites,(site_clster*ns_unit)+1) =  -(0.5*u_int)*cmplx(tempmx1,tempmy1)
-  
-
-      !!!! interaction term for the 3nr site in the unit cell
-      hamiltonian((site_clster*ns_unit)+2,(site_clster*ns_unit)+2) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz2
-      hamiltonian((site_clster*ns_unit)+2+n_sites,(site_clster*ns_unit)+2+n_sites) = -(mu - 0.5*u_int) +  (0.5*u_int)*tempmz2
-
-      hamiltonian((site_clster*ns_unit)+2,(site_clster*ns_unit)+n_sites+2) =   -(0.5*u_int)*cmplx(tempmx2,-tempmy2)
-      hamiltonian((site_clster*ns_unit)+2+n_sites,(site_clster*ns_unit)+2) =  -(0.5*u_int)*cmplx(tempmx2,tempmy2)
-  
-  
-  else
-     call random_number(mc_prob)
-     if(mc_prob < exp(-beta*delE)) then
-        
-      m(0,site_clster*ns_unit) = tempm0 !! update the mc variable if energy is reduced  for the 1st site in the unit cell
-      theta(0,site_clster*ns_unit) = temptheta0
-      phi(0,site_clster*ns_unit) = tempphi0
-
-      m(1,site_clster*ns_unit+1) = tempm1 !! update the mc variable if energy is reduced  for the 2nd site in the unit cell
-      theta(1,site_clster*ns_unit+1) = temptheta1
-      phi(1,site_clster*ns_unit+1) = tempphi1
-
-      m(2,site_clster*ns_unit+2) = tempm2 !! update the mc variable if energy is reduced  for the 3rd site in the unit cell
-      theta(2,site_clster*ns_unit+2) = temptheta2
-      phi(2,site_clster*ns_unit+2) = tempphi2
-
-      !!!! interaction term for the 1st site in the unit cell
-      hamiltonian(site_clster*ns_unit,site_clster*ns_unit) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz0
-      hamiltonian((site_clster*ns_unit)+n_sites,(site_clster*ns_unit)+n_sites) = -(mu - 0.5*u_int) +  (0.5*u_int)*tempmz0
-
-      hamiltonian(site_clster*ns_unit,(site_clster*ns_unit)+n_sites) =   -(0.5*u_int)*cmplx(tempmx0,-tempmy0)
-      hamiltonian((site_clster*ns_unit)+n_sites,site_clster*ns_unit) =  -(0.5*u_int)*cmplx(tempmx0,tempmy0)
-  
-      !!!! interaction term for the 2nd site in the unit cell
-      hamiltonian((site_clster*ns_unit)+1,(site_clster*ns_unit)+1) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz1
-      hamiltonian((site_clster*ns_unit)+n_sites,(site_clster*ns_unit)+n_sites) = -(mu - 0.5*u_int) +  (0.5*u_int)*tempmz1
-
-      hamiltonian((site_clster*ns_unit)+1,(site_clster*ns_unit)+n_sites+1) =   -(0.5*u_int)*cmplx(tempmx1,-tempmy1)
-      hamiltonian((site_clster*ns_unit)+1+n_sites,(site_clster*ns_unit)+1) =  -(0.5*u_int)*cmplx(tempmx1,tempmy1)
-  
-      !!!! interaction term for the 3nr site in the unit cell
-      hamiltonian((site_clster*ns_unit)+2,(site_clster*ns_unit)+2) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz2
-      hamiltonian((site_clster*ns_unit)+2+n_sites,(site_clster*ns_unit)+2+n_sites) = -(mu - 0.5*u_int) +  (0.5*u_int)*tempmz2
-
-      hamiltonian((site_clster*ns_unit)+2,(site_clster*ns_unit)+n_sites+2) =   -(0.5*u_int)*cmplx(tempmx2,-tempmy2)
-      hamiltonian((site_clster*ns_unit)+2+n_sites,(site_clster*ns_unit)+2) =  -(0.5*u_int)*cmplx(tempmx2,tempmy2)
-      end if
-  end if
 end subroutine mc_sweep
 !! ---------------------------------------------------------------------------!!
 
@@ -1111,11 +997,11 @@ end subroutine mc_sweep
 !! --------------  monte carlo sweep for the unit cell------------------------!!
 !! ---------------------------------------------------------------------------!!
 
-subroutine mcsweepUnitCell(m_min,m_max,loc_site,dim_clsh,ns_unit,mu,u_int,si,cls_dim)
+subroutine mcsweepUnitCell(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si)
 implicit none
-  
-  integer(8) :: dim_h,dim_clsh,n_sites,site_clster,cls_dim,ns_unit
-  integer(8) :: loc_site !! local site that is being flipped
+  integer(8) :: dim_h,dim_clsh,n_sites,site_clster,cls_dim,ns_unit,si
+  integer(8) :: loc_site,sil,silc,silt,siltn !! index of site in the cluster
   integer(8) :: info
   integer(8) :: lwork,lrwork,liwork
   integer(8) :: cls_sites
@@ -1131,7 +1017,7 @@ implicit none
   real(8) :: rand_int1,rand_int2, rand_int3
   real(8) :: delE,tempm,temptheta,tempphi !! store temp value of m,theta,phi for site 0
  
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls ! cluster hamiltonian
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls 
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: temp_clsham !! to store a copy of the cluster hamiltonian 
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original hamiltonian
   real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi  !! m , theta , phi array
@@ -1165,50 +1051,60 @@ implicit none
   
   temp_clsham(:,:)  = hamil_cls(:,:)
   loc_m(:,:) = m(:,:)
-  info  = 10
+  info  = 10 
   !!! call diagonalization subroutine
-  call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
+  call zheevd('V','U', dim_clsh, temp_clsham, dim_clsh, egval, work, lwork, &
                                            rwork, lrwork, iwork, liwork, info)
   
   !!! call subroutine to calculate the energy
   call enr_calc(egval,dim_clsh,loc_m,n_sites,cl_st,cls_dim,enr_loc,site_clster,tvar,u_int)
   e_u = enr_loc
-  
+
+  !! copying the cluster hamiltonian 
+  temp_clsham(:,:) = hamil_cls(:,:)
   !! pick a site to update the monte carlo variable
-  si = loc_site * ns_unit ; sic = si + (ns_unit*cls_dim)
+  sil = si+(loc_site * ns_unit)  ; silc = sil + (ns_unit*cls_dim)
 
-  hamil_cls(si,si) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
-  hamil_cls(sic,sic) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+  temp_clsham(sil,sil) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
+  temp_clsham(silc,silc) = -(mu-0.5*u_int) + (0.5*u_int)*mz
 
-  hamil_cls(si,sic) =  -(0.5*u_int)*cmplx(mx,-my)
-  hamil_cls(sic,si) = -(0.5*u_int)*cmplx(mx,my)
+  temp_clsham(sil,silc) =  -(0.5*u_int)*cmplx(mx,-my)
+  temp_clsham(silc,sil) = -(0.5*u_int)*cmplx(mx,my)
   
-  loc_m(si,site_clster*ns_unit) = tempm
-  
-
+  loc_m(si,site_clster) = tempm
+  info = 10  
   !!! call diagonalization subroutine
-  call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
+  call zheevd('V','U', dim_clsh, temp_clsham, dim_clsh, egval, work, lwork, &
                                            rwork, lrwork, iwork, liwork, info)
   
   !!! call subroutine to calculate the energy
   call enr_calc(egval,dim_clsh,loc_m,n_sites,cl_st,cls_dim,enr_loc,site_clster,tvar,u_int)
   e_v = enr_loc
-
+  silt = si+(site_clster*ns_unit)  !! position of the cluster center in the lattice
+  siltn = silt + (ns_unit*n_sites) !! positin of the cluster center for the down spin
+  
+  
   !! calculate the energy difference
   delE = e_v - e_u
-  sic = si + (ns_unit*site_clster) ; sicn = sic+(n_sites*ns_unit)
+
   if (delE < 0.0) then
     m(si,site_clster) = tempm  !! update m 
     theta(si,site_clster) = temptheta !! update theta
     phi(si,site_clster) = tempphi  !! update phi
- 
+    
+    hamil_cls(sil,sil) = -(mu-0.5*u_int) - (0.5*u_int)*mz
+    hamil_cls(silc,silc) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+
+    hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
+    hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
+
     !! update the hamiltonian matrix element for sic,sicn for spin up and spin down
-    hamiltonian(sic,sic) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
-    hamiltonian(sicn,sicn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+    hamiltonian(silt,silt) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
+    hamiltonian(siltn,siltn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
 
     !! update the hamiltonian for updn and dnup element for site sic
-    hamiltonian(sic,sicn) = -(0.5*u_int)*cmplx(mx,-my)
-    hamiltonian(sicn,sic) = -(0.5*u_int)*cmplx(mx,my)
+    hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
+    hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
 
   else 
     !! if the energy is not lowered update the site with the probability exp(-beta*delE)
@@ -1219,11 +1115,18 @@ implicit none
         theta(si,site_clster) = temptheta !! update theta
         phi(si,site_clster) = tempphi  !! update phi
         
-        hamiltonian(sic,sic) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
-        hamiltonian(sicn,sicn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
 
-        hamiltonian(sic,sicn) = -(0.5*u_int)*cmplx(mx,-my)
-        hamiltonian(sicn,sic) = -(0.5*u_int)*cmplx(mx,my)
+        hamil_cls(sil,sil) = -(mu-0.5*u_int) - (0.5*u_int)*mz
+        hamil_cls(silc,silc) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+
+        hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
+        hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
+
+        hamiltonian(silt,silt) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
+        hamiltonian(siltn,siltn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+
+        hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
+        hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
     end if
   end if
 end subroutine mcsweepUnitCell
