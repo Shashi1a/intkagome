@@ -960,28 +960,28 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   integer(8), dimension(0:n_sites-1,0:cls_dim-1)::cl_st ! sites in the cluster at site j
  
   !!! variables for the monte carlo procedure
-  real(8) :: tempmx0,tempmy0,tempmz0 ! to store initial value of mx,my,mz
-  real(8) :: tempmx1,tempmy1,tempmz1 ! to store initial value of mx,my,mz
-  real(8) :: tempmx2,tempmy2,tempmz2 ! to store initial value of mx,my,mz
+  real(8) :: tempmx0,tempmy0,tempmz0 ! to store initial value of mx,my,mz site 0
+  real(8) :: tempmx1,tempmy1,tempmz1 ! to store initial value of mx,my,mz site 1
+  real(8) :: tempmx2,tempmy2,tempmz2 ! to store initial value of mx,my,mz site 2
 
   real(8) :: rand1, rand2 , rand3 ! random number to generate,m,theta,phi
   real(8) :: rand_int1,rand_int2, rand_int3
-  real(8) :: delE,tempm0,temptheta0,tempphi0 
-  real(8) :: tempm1,temptheta1,tempphi1
-  real(8) :: tempm2,temptheta2,tempphi2
-
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: temp_clsham
-  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
-  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi
-  real(8),dimension(0:2,0:n_sites-1) :: loc_m
-  real(8),dimension(0:dim_clsh-1) :: egval
+  real(8) :: delE,tempm0,temptheta0,tempphi0 !! store temp value of m,theta,phi for site 0
+  real(8) :: tempm1,temptheta1,tempphi1 !! store temp value of m,theta,phi for site 1
+  real(8) :: tempm2,temptheta2,tempphi2 !! store temp value of m,theta,phi for site 2
+ 
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls ! cluster hamiltonian
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: temp_clsham !! to store a copy of the cluster hamiltonian 
+  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original hamiltonian
+  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi  !! m , theta , phi array
+  real(8),dimension(0:2,0:n_sites-1) :: loc_m  !! local m array
+  real(8),dimension(0:dim_clsh-1) :: egval !! eigenvalue array
   
   complex(8),dimension(lwork)::work
   real(8),dimension(lrwork) :: rwork
   integer(8),dimension(liwork)::iwork
 
-  loc_m(:,:) = 0
+  loc_m(:,:) = 0  ! initialize all entries to zero
   beta = 1./tvar
   ! position of global site in the cluster (center)
   loc_site = int((0.5*cls_sites)+cls_sites*(0.5*cls_sites))
@@ -995,7 +995,7 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   call random_number(rand3)
   !! temp m
   rand_int1=rand1*5000
-  temp0=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
+  tempm0=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
   
   !! temp theta
   rand_int2=rand2*1000
@@ -1071,32 +1071,37 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
                                           rwork, lrwork, iwork, liwork, info)
   call enr_calc(egval,dim_clsh,loc_m,n_sites,cl_st,cls_dim,enr_loc,site_clster,tvar,u_int)
   e_u = enr_loc
+  
+  si0 = loc_site * ns_unit  ; si0c = si0 + (ns_unit*cls_dim)
+  si1 = (loc_site * ns_unit) + 1 ; si1c  = si1 + (ns_unit * cls_dim)
+  si2 = (loc_site * ns_unit) + 2 ; si2c = si2 + (ns_unit * cls_dim)
+
 
   !! updating the diagonal part of the matrix, upup & dndn for the 1st site
-  hamil_cls(loc_site*ns_unit,loc_site*ns_unit) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz0
-  hamil_cls((loc_site*ns_unit)+cls_dim,(loc_site*ns_unit)+cls_dim) = -(mu-0.5*u_int) + (0.5*u_int)*tempmz0
+  hamil_cls(si0,si0) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz0
+  hamil_cls(si0c,si0c) = -(mu-0.5*u_int) + (0.5*u_int)*tempmz0
 
   !! updating the blocks updn & dnup for the 1st site
-  hamil_cls(loc_site*ns_unit,(loc_site*ns_unit)+cls_dim) = -(0.5*u_int)*cmplx(tempmx0,-tempmy0)
-  hamil_cls((loc_site*ns_unit)+cls_dim,(ns_unit*loc_site)) = -(0.5*u_int)*cmplx(tempmx0,tempmy0)
+  hamil_cls(si0,si0c) = -(0.5*u_int)*cmplx(tempmx0,-tempmy0)
+  hamil_cls(si0c,si0) = -(0.5*u_int)*cmplx(tempmx0,tempmy0)
 
 
   !! updating the diagonal part of the matrix, upup & dndn for the 2nd site
-  hamil_cls(loc_site*ns_unit+1,loc_site*ns_unit+1) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz1
-  hamil_cls((loc_site*ns_unit)+cls_dim+1,(loc_site*ns_unit)+1+cls_dim) = -(mu-0.5*u_int) + (0.5*u_int)*tempmz1
+  hamil_cls(si1,si1) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz1
+  hamil_cls(si1c,si1c) = -(mu-0.5*u_int) + (0.5*u_int)*tempmz1
 
   !! updating the blocks updn & dnup for the 1st site
-  hamil_cls(loc_site*ns_unit+1,(loc_site*ns_unit)+cls_dim+1) = -(0.5*u_int)*cmplx(tempmx1,-tempmy1)
-  hamil_cls((loc_site*ns_unit)+1+cls_dim,(ns_unit*loc_site)+1) = -(0.5*u_int)*cmplx(tempmx1,tempmy1)
+  hamil_cls(si1,si1c) = -(0.5*u_int)*cmplx(tempmx1,-tempmy1)
+  hamil_cls(si1c,si1) = -(0.5*u_int)*cmplx(tempmx1,tempmy1)
 
 
   !! updating the diagonal part of the matrix, upup & dndn for the 3rd site
-  hamil_cls(loc_site*ns_unit+2,loc_site*ns_unit+2) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz2
-  hamil_cls((loc_site*ns_unit)+cls_dim+2,(loc_site*ns_unit)+2+cls_dim) = -(mu-0.5*u_int) + (0.5*u_int)*tempmz2
+  hamil_cls(si2,si2) = -(mu-0.5*u_int) - (0.5*u_int)*tempmz2
+  hamil_cls(si2c,si2c) = -(mu-0.5*u_int) + (0.5*u_int)*tempmz2
 
   !! updating the blocks updn & dnup for the 1st site
-  hamil_cls(loc_site*ns_unit+2,(loc_site*ns_unit)+cls_dim+2) = -(0.5*u_int)*cmplx(tempmx2,-tempmy2)
-  hamil_cls((loc_site*ns_unit)+2+cls_dim,(ns_unit*loc_site)+2) = -(0.5*u_int)*cmplx(tempmx2,tempmy2)
+  hamil_cls(si2,si2c) = -(0.5*u_int)*cmplx(tempmx2,-tempmy2)
+  hamil_cls(si2c,si2) = -(0.5*u_int)*cmplx(tempmx2,tempmy2)
 
 
   info = 10
@@ -1196,8 +1201,22 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
 end subroutine mc_sweep
 !! ---------------------------------------------------------------------------!!
 
+!! ---------------------------------------------------------------------------!!
+!! --------------  monte carlo sweep for the unit cell------------------------!!
+!! ---------------------------------------------------------------------------!!
 
-!! 2344
+subroutine mcsweepUnitCell()
+implicit none
+
+
+end subroutine mcsweepUnitCell
+
+
+
+
+!! ---------------------------------------------------------------------------!!
+
+
 !! ---------------------------------------------------------------------------!!
 !! ------------------------measurement of energy------------------------------!!
 !! ---------------------------------------------------------------------------!!
