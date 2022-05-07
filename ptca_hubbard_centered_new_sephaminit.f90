@@ -10,21 +10,21 @@ program ptca_repulsive
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
   integer(8),parameter :: ns_unit = 3
-  integer(8),parameter :: L = 6 !! system size
+  integer(8),parameter :: L = 12 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
   integer(8),parameter :: cls_sites =  4 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
   integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
   integer(8),parameter :: split_sites = n_sites/n_splits
   integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
-  integer(8),parameter :: n_equil  = 2 !! no of equilibrium steps
-  integer(8),parameter :: n_meas  = 2 !! no of measurements
+  integer(8),parameter :: n_equil  = 10 !! no of equilibrium steps
+  integer(8),parameter :: n_meas  = 10 !! no of measurements
   integer(8),parameter :: meas_skip = 1 ! make measurement after this mc cycles
   integer(8),parameter :: dim_h = 6*n_sites  ! dimensionality of hamiltonian
   integer(8),parameter :: dim_clsh = 6*cls_dim ! dimensionality of cluster hamiltonian
   real(8),parameter :: temp = 0.30  !! simulation temperature
-  real(8),parameter :: dtemp = 0.29 !! temperature step to lower the temperature
-  real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
+  real(8),parameter :: dtemp = 0.01 !! temperature step to lower the temperature
+  real(8),parameter :: t_min = 0.28 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
   real(8),parameter :: u_int = 0.0
@@ -84,7 +84,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
     if (my_id == 0) then
         call mcvar_init(ns_unit,n_sites,m,theta,phi,pi,m_min,m_max)
     end if
-    
+    call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+
     !! synchronize all the processes and broadcast m configuration
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     call MPI_BCAST(m,ns_unit*n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
@@ -98,15 +99,13 @@ integer, dimension(MPI_STATUS_SIZE)::status
     call MPI_BCAST(phi,ns_unit*n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
 
 
-    !! subroutine to initialize the full lattice hamiltonian (2L*L,2*L*L) by master
+    !! subroutine to initialize the full lattice hamiltonian (2L*L,2*L*L) by all processes
+    !! since we have broadcasted monte carlo variables to all processes all of them will 
+    !! have the same hamiltonian.
     
     call ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h,ns_unit)
     
-    !call zheevd('V','U', dim_clsh, hamiltonian, dim_clsh, egval, work, lwork, &
-    !                                      rwork, lrwork, iwork, liwork, info)
-    !print *,egval   
-
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
@@ -116,17 +115,18 @@ integer, dimension(MPI_STATUS_SIZE)::status
     !! subroutine to split the lattice based on the cluster dimensions
     call  lattice_splt(split_sites,n_splits,n_sites,ncl_by2,sites_array,L)
   
-      !! initialize the temperature and we will loop over this
+    !! initialize the temperature and we will loop over this
     tvar  = temp
     !!! temperature loop over all the temperatures
     do while (tvar > t_min)
-    print *,tvar,"started"
-    call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+      print *,tvar,"started"
+      call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
-    !! time when the equilibration started
-    call cpu_time(t_strt_equil)
-    !!! Equlibration cycle
-    do i = 0, n_equil, 1
+      !! time when the equilibration started
+      call cpu_time(t_strt_equil)
+      !!! Equlibration cycle
+      
+      do i = 0, n_equil, 1
        !! loop over all the splits 
         do j=0,n_splits-1,1
           !! intializing changed vars to -1 and broadcast it to all the processes
@@ -143,8 +143,6 @@ integer, dimension(MPI_STATUS_SIZE)::status
           
           !! loop over all the sites within the partition
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
-            print *,ki,j,i
-
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
             
@@ -160,7 +158,6 @@ integer, dimension(MPI_STATUS_SIZE)::status
           end do
           
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-          
           
           !!! transfer the new m,theta,phi,hamiltonian between all the processors
           if (my_id==0) then
@@ -200,31 +197,22 @@ integer, dimension(MPI_STATUS_SIZE)::status
           !! synchronize all the processes       
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
-        !! broadcast the updated m vlaues from root
+        !! broadcast the updated m vlaues from root and wait for all the proccess
         call MPI_BCAST(m,ns_unit*n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
-        
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-        !! broadcast the updated theta vlaues from root
+        
+        !! broadcast the updated theta vlaues from root and wait for all the proccess
         call MPI_BCAST(theta,ns_unit*n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+        call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         
         !! broadcast the updated phi vlaues from root
-        call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         call MPI_BCAST(phi,ns_unit*n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
-        
-
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
         !! initializing the most updated hamiltonian using the updated
         !! monte carlo configurations of m,theta and phi
         call ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h,ns_unit)
-        
-        !do loc_proc=0,10,1
-        !print *,'ab',m(j*(split_sites-1):(j+1)*(split_sites-1)),my_id
-        !print *,'ab',theta(j*(split_sites-1):(j+1)*(split_sites-1)),my_id
-        !print *, phi(j*(split_sites-1):(j+1)*(split_sites-1)),my_id
-        !end do
-
         end do
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         
@@ -250,9 +238,10 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
       !!! measurement cycle
       call cpu_time(t_strt_meas)
-      do i = 1, 0, 1
+      do i = 0,n_meas , 1
         print *,'measurement loop with temp',tvar
         !! loop over all partition of the lattice
+        
         do j=0,n_splits-1,1
   
           !! intializing changed vars to -1 and broadcast it to all the processes
@@ -270,14 +259,13 @@ integer, dimension(MPI_STATUS_SIZE)::status
          do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
-            print*,ki
             !!    initialize cluster hamiltonian
-            !call cluster_ham(site_clster,L,n_sites,cls_sites,hamil_cls,cls_dim,&
-            !                t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
+            call cluster_ham(site_clster,L,n_sites,cls_sites,hamil_cls,cls_dim,&
+                            t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
 
             !!     try to update the mc variables at the given site
-            !call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
-            !     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
+            call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+                 cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
 
             !! loop over the sites in each non-interacting split of the lattice
             end do
@@ -339,8 +327,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
           !! initializing the most updated hamiltonian using the updated
           !! monte carlo configurations of m,theta and phi
-          call ham_init(right,left,up,down,L,n_sites,hamiltonian,t_hopping,&
-                            mu,u_int,m,theta,phi,dim_h)
+          call ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
+                            mu,u_int,m,theta,phi,dim_h,ns_unit)
         
         !!! loop end for all the splits
         end do    
@@ -356,7 +344,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
           open(16,file=fname,action='write',position='append')
           do j=0,n_sites-1,1
             write(16,20) i,j,m(0,j),m(1,j),m(2,j),theta(0,j),theta(1,j),theta(2,j),phi(0,j),phi(1,j),phi(2,j)
-            20  format(I4,2X,I4,2X,ES22.8,2X,ES22.8,2X,ES22.82X,ES22.8,2X,ES22.8,2X,ES22.82X,ES22.8,2X,ES22.8,2X,ES22.8)
+            20  format(I4,2X,I4,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8)
           end do
           close(16)
         end if
@@ -433,19 +421,20 @@ end subroutine neighbour_table
 subroutine mcvar_init(ns_unit,n_sites,m,theta,phi,pi,m_min,m_max)
 implicit none
   integer(8) :: n_sites,i,ns_unit,j
-  
-  real(8) :: pi
-  real(8) :: m_min,m_max
-  real(8):: rand3,rand1,rand2
-  real(8) :: rand_int3,rand_int1,rand_int2
-  real(8),dimension(0:ns_unit,0:n_sites-1) :: m,theta,phi  
+  real(8) :: pi,m_min,m_max
+  real(8):: rand3,rand1,rand2,rand_int3,rand_int1,rand_int2
+  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi  
 
-  do i = 0, n_sites-1, 1
+  !! initialize the initial configuration of the monte carlo variables
+  !! loop over the sites in the lattice
+  do i=0,n_sites-1,1
+
+    !! loop over the sites in the unit cell
     do j=0,ns_unit-1,1
     call random_number(rand1)
     call random_number(rand2)
     call random_number(rand3)
-
+    
     rand_int1=int(rand1*5000)
     m(j,i)=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
 
@@ -455,8 +444,6 @@ implicit none
     rand_int3=int(rand3*2000)
     phi(j,i)=(2.0_8*pi)*(rand_int3/2000.0)
     end do
-
-    
   end do
 end subroutine mcvar_init
 
@@ -1113,12 +1100,12 @@ implicit none
     hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
 
     !! update the hamiltonian matrix element for sic,sicn for spin up and spin down
-    hamiltonian(silt,silt) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
-    hamiltonian(siltn,siltn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+    !hamiltonian(silt,silt) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
+    !hamiltonian(siltn,siltn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
 
     !! update the hamiltonian for updn and dnup element for site sic
-    hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
-    hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
+    !hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
+    !hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
 
   else 
     !! if the energy is not lowered update the site with the probability exp(-beta*delE)
@@ -1138,12 +1125,12 @@ implicit none
         hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
 
         !! updating the original hamiltonian
-        hamiltonian(silt,silt) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
-        hamiltonian(siltn,siltn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+        !hamiltonian(silt,silt) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
+        !hamiltonian(siltn,siltn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
 
         !! updating the original hamiltonian
-        hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
-        hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
+        !hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
+        !hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
     end if
   end if
 end subroutine mcsweepUnitCell
@@ -1213,8 +1200,6 @@ end subroutine enr_calc
    character(len=20)::str_4   
    character(len=200):: fname
 
-
-
    !!! set format based on L
    if(L<10)then
      format_L="(I1)"
@@ -1224,7 +1209,6 @@ end subroutine enr_calc
      format_L="(I3)"
    end if
 
-   
    !!! set format based on U
    if (u_int < 10.0) then
      format_U="(F5.3)"
