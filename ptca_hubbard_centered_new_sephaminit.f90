@@ -5,7 +5,7 @@ program ptca_repulsive
 !!! this should be able to save time compared to transferring hamiltonian also
   implicit none
   include "mpif.h"
-  integer(8) :: i,j,ki
+  integer(8) :: i,j,ki=
   integer :: my_id,num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
@@ -28,11 +28,12 @@ program ptca_repulsive
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
   real(8),parameter :: u_int = 0.0
-  real(8),parameter :: mu 
+  real(8),parameter :: mu = 0.0
   real(8),parameter :: m_max=2.0_8,m_min=0.0_8
   real :: t_strt_equil, t_end_equil
   real :: t_strt_meas , t_end_meas
-  real :: delT 
+  real :: delT , mu_initial 
+
   !!! this array will be initialized to -1 at the starting 
   !!! entry will be changed to 1 when that particular site is updated during mc
   integer(8),dimension(0:split_sites-1)::changed_ids,loc_ids
@@ -155,7 +156,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
                 t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
             
             !!  try to update the mc variables at the given site
-            call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+            call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
                  cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
 
 !          print *,'bb',m(site_clster),my_id,site_clster
@@ -268,7 +269,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
                             t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
 
             !!     try to update the mc variables at the given site
-            call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+            call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
                  cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
 
             !! loop over the sites in each non-interacting split of the lattice
@@ -938,7 +939,7 @@ end subroutine lattice_splt
 !! ---------------------------------------------------------------------------!!
 !! -------------------- monte carlo sweep--------------------------------------!!
 !! ---------------------------------------------------------------------------!!
-subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_congs,site_clster,&
      cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
  implicit none
   integer(8) :: dim_h,dim_clsh,n_sites,site_clster,cls_dim,ns_unit,si
@@ -954,7 +955,7 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
  
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls ! cluster hamiltonian
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original full hamiltonian
-  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi  !! m , theta , phi array
+  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi,charge_confs  !! m , theta , phi array
   real(8),dimension(0:dim_clsh-1) :: egval !! eigenvalue array
   
   complex(8),dimension(lwork)::work
@@ -971,17 +972,17 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_
   
   !!! updating first site in the unit cell
   si = 0 
-  call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+  call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
      cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
   
   !!! trying to update the second site in the unit cell
   si = 1 
-  call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+  call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
      cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
   
   !!! trying to update the third site in the unit cell
   si = 2
-  call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+  call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
      cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
   
 
@@ -992,7 +993,7 @@ end subroutine mc_sweep
 !! --------------  monte carlo sweep for the unit cell------------------------!!
 !! ---------------------------------------------------------------------------!!
 
-subroutine mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
+subroutine mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
      cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
 implicit none
   integer(8) :: dim_h,dim_clsh,n_sites,site_clster,cls_dim,ns_unit,si
@@ -1015,7 +1016,7 @@ implicit none
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls 
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: temp_clsham,temp2_clsham !! to store a copy of the cluster hamiltonian 
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original hamiltonian
-  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi  !! m , theta , phi array
+  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi,charge_confs  !! m , theta , phi array
   real(8),dimension(0:ns_unit-1,0:n_sites-1) :: loc_m  !! local m array
   real(8),dimension(0:dim_clsh-1) :: egval !! eigenvalue array
   
@@ -1064,8 +1065,8 @@ implicit none
   sil = si + (loc_site * ns_unit)  
   silc = sil + (ns_unit*cls_dim)
 
-  temp_clsham(sil,sil) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
-  temp_clsham(silc,silc) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+  temp_clsham(sil,sil) =  -(mu-charge_confs(si,site_clster)) - (0.5*u_int)*mz
+  temp_clsham(silc,silc) = -(mu-charge_confs(si,site_clster)) + (0.5*u_int)*mz
 
   temp_clsham(sil,silc) =  -(0.5*u_int)*cmplx(mx,-my)
   temp_clsham(silc,sil) = -(0.5*u_int)*cmplx(mx,my)
@@ -1096,20 +1097,12 @@ implicit none
     phi(si,site_clster) = tempphi  !! update phi
     
     !! updating the cluster hamiltonian 
-    hamil_cls(sil,sil) = -(mu-0.5*u_int) - (0.5*u_int)*mz
-    hamil_cls(silc,silc) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+    hamil_cls(sil,sil) = -(mu-charge_confs(si,site_clster)) - (0.5*u_int)*mz
+    hamil_cls(silc,silc) = -(mu-charge_confs(si,site_clster)) + (0.5*u_int)*mz
 
     !! updating the cluster hamiltonian 
     hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
     hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
-
-    !! update the hamiltonian matrix element for sic,sicn for spin up and spin down
-    !hamiltonian(silt,silt) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
-    !hamiltonian(siltn,siltn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
-
-    !! update the hamiltonian for updn and dnup element for site sic
-    !hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
-    !hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
 
   else 
     !! if the energy is not lowered update the site with the probability exp(-beta*delE)
@@ -1121,20 +1114,13 @@ implicit none
         phi(si,site_clster) = tempphi  !! update phi
         
         !! updating the cluster hamiltonian 
-        hamil_cls(sil,sil) = -(mu-0.5*u_int) - (0.5*u_int)*mz
-        hamil_cls(silc,silc) = -(mu-0.5*u_int) + (0.5*u_int)*mz
+        hamil_cls(sil,sil) = -(mu-charge_confs(si,site_clster)) - (0.5*u_int)*mz
+        hamil_cls(silc,silc) = -(mu-charge_confs(si,site_clster)) + (0.5*u_int)*mz
 
         !! updating the cluster hamiltonian 
         hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
         hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
 
-        !! updating the original hamiltonian
-        !hamiltonian(silt,silt) =  -(mu-0.5*u_int) - (0.5*u_int)*mz
-        !hamiltonian(siltn,siltn) = -(mu-0.5*u_int) + (0.5*u_int)*mz
-
-        !! updating the original hamiltonian
-        !hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
-        !hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
     end if
   end if
 end subroutine mcsweepUnitCell
