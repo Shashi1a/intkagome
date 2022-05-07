@@ -49,7 +49,7 @@ program ptca_repulsive
   real(8),dimension(0:ns_unit-1,0:n_sites-1):: m,m_loc   !! m
   real(8),dimension(0:ns_unit-1,0:n_sites-1):: theta,loc_theta !! theta
   real(8),dimension(0:ns_unit-1,0:n_sites-1):: phi,loc_phi  !! phi
-
+  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: charge_confs !! to store charge configurations
 !!!!!!!!!!!!!!! full hamiltonian and cluster hamiltonian !!!!!!!!!!!!
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls
@@ -79,13 +79,18 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
     !! calling the subroutine to initialize the neighbours
     call neighbour_table(right,left,up,down,L,n_sites,sites,right_up,left_down)
-   
+    
+    
+
     !! subroutinee to initialize the mc variables(m,theta,phi) at each site
     if (my_id == 0) then
         call mcvar_init(ns_unit,n_sites,m,theta,phi,pi,m_min,m_max)
     end if
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-
+    
+    !! setting all charge configuration values as 1.5*U
+    charge_confs(:,:) = 1.5*u_int
+    
     !! synchronize all the processes and broadcast m configuration
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     call MPI_BCAST(m,ns_unit*n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
