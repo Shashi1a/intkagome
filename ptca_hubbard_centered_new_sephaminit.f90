@@ -5,7 +5,7 @@ program ptca_repulsive
 !!! this should be able to save time compared to transferring hamiltonian also
   implicit none
   include "mpif.h"
-  integer(8) :: i,j,ki=
+  integer(8) :: i,j,ki
   integer :: my_id,num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
@@ -641,7 +641,7 @@ implicit none
   integer(8) :: sic, sicn , clsi,clsin
   integer(8) :: sic1 , sicn1 , clsi1 , clsin1 
   integer(8) :: sic2 , sicn2 , clsi2 , clsin2 
-  real(8) :: t_hopping,mu ! hopping strength
+  real(8) :: t_hopping,mu ! hopping strength and chemical potential
   !! arrays with all sites and the sites in the cluster
   integer(8),dimension(0:n_sites-1,0:cls_dim-1) :: cl_st
 
@@ -939,7 +939,7 @@ end subroutine lattice_splt
 !! ---------------------------------------------------------------------------!!
 !! -------------------- monte carlo sweep--------------------------------------!!
 !! ---------------------------------------------------------------------------!!
-subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_congs,site_clster,&
+subroutine mc_sweep(sum_mu,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
      cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
  implicit none
   integer(8) :: dim_h,dim_clsh,n_sites,site_clster,cls_dim,ns_unit,si
@@ -947,13 +947,13 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charg
   integer(8) :: info
   integer(8) :: lwork,lrwork,liwork
   integer(8) :: cls_sites
-  real(8) :: mu, u_int
+  real(8) :: mu, u_int , mu_loc,sum_mu
   real(8) :: pi,beta,e_u,e_v,enr_loc
   real(8)  :: tvar
   real(8) :: m_min,m_max,mc_prob
   integer(8), dimension(0:n_sites-1,0:cls_dim-1)::cl_st ! sites in the cluster at site j
  
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls ! cluster hamiltonian
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls,temp_ham ! cluster hamiltonian
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original full hamiltonian
   real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi,charge_confs  !! m , theta , phi array
   real(8),dimension(0:dim_clsh-1) :: egval !! eigenvalue array
@@ -966,26 +966,27 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charg
 
   ! position of global site in the cluster (center)
   loc_site = int((0.5*cls_sites)+cls_sites*(0.5*cls_sites))
+  temp_ham = hamil_cls
+  call zheevd('V','U', dim_clsh, temp_ham, dim_clsh, egval, work, lwork, &
+                                           rwork, lrwork, iwork, liwork, info)
   
-  !call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
-  !                                         rwork, lrwork, iwork, liwork, info)
-  
+  mu = 0.5*(egval(int(0.5*dim_clsh)+1)+egval(int(0.5*dim_clsh)))
+
   !!! updating first site in the unit cell
   si = 0 
   call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
-     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
+     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit,mu)
   
   !!! trying to update the second site in the unit cell
   si = 1 
   call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
-     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
+     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit,mu)
   
   !!! trying to update the third site in the unit cell
   si = 2
   call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
-     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
+     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit,mu)
   
-
 end subroutine mc_sweep
 !! ---------------------------------------------------------------------------!!
 
@@ -1090,7 +1091,7 @@ implicit none
   
   !! calculate the energy difference
   delE = e_v - e_u
-
+ 
   if (delE < 0.0) then
     m(si,site_clster) = tempm  !! update m 
     theta(si,site_clster) = temptheta !! update theta
