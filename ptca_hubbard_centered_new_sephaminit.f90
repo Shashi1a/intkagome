@@ -28,7 +28,7 @@ program ptca_repulsive
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
   real(8),parameter :: u_int = 0.0
-  real(8),parameter :: mu = 0.5*(u_int)
+  real(8),parameter :: mu 
   real(8),parameter :: m_max=2.0_8,m_min=0.0_8
   real :: t_strt_equil, t_end_equil
   real :: t_strt_meas , t_end_meas
@@ -80,8 +80,6 @@ integer, dimension(MPI_STATUS_SIZE)::status
     !! calling the subroutine to initialize the neighbours
     call neighbour_table(right,left,up,down,L,n_sites,sites,right_up,left_down)
     
-    
-
     !! subroutinee to initialize the mc variables(m,theta,phi) at each site
     if (my_id == 0) then
         call mcvar_init(ns_unit,n_sites,m,theta,phi,pi,m_min,m_max)
@@ -108,7 +106,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
     !! since we have broadcasted monte carlo variables to all processes all of them will 
     !! have the same hamiltonian.
     
-    call ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
+    call ham_init(charge_confs,right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h,ns_unit)
     
     !! wait for all the process to finish this
@@ -153,8 +151,9 @@ integer, dimension(MPI_STATUS_SIZE)::status
             
             !print *,'before sweep',my_id,site_clster
             !!  initialize cluster hamiltonian
-            call cluster_ham(site_clster,L,n_sites,cls_sites, hamil_cls,cls_dim,&
+            call cluster_ham(mu,site_clster,L,n_sites,cls_sites, hamil_cls,cls_dim,&
                 t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
+            
             !!  try to update the mc variables at the given site
             call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
                  cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
@@ -216,7 +215,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
         !! initializing the most updated hamiltonian using the updated
         !! monte carlo configurations of m,theta and phi
-        call ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
+        call ham_init(charge_confs,right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h,ns_unit)
         end do
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -265,7 +264,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
             !!    initialize cluster hamiltonian
-            call cluster_ham(site_clster,L,n_sites,cls_sites,hamil_cls,cls_dim,&
+            call cluster_ham(mu,site_clster,L,n_sites,cls_sites,hamil_cls,cls_dim,&
                             t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
 
             !!     try to update the mc variables at the given site
@@ -332,7 +331,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
           !! initializing the most updated hamiltonian using the updated
           !! monte carlo configurations of m,theta and phi
-          call ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
+          call ham_init(charge_confs,right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h,ns_unit)
         
         !!! loop end for all the splits
@@ -456,7 +455,7 @@ end subroutine mcvar_init
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!initializing the hamiltonian!!!!1!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine ham_init(right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,mu, &
+subroutine ham_init(charge_confs,right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,mu, &
                       u_int,m,theta,phi,dim_h,ns_unit)
 implicit none
   integer :: i,id0,id1,id2,id0n,id1n,id2n
@@ -469,7 +468,7 @@ implicit none
   real(8) ::mx0,mx1,mx2
   real(8) ::my0,my1,my2
   real(8) ::mz0,mz1,mz2
-  real(8),dimension(0:ns_unit,0:n_sites-1)::m,theta,phi
+  real(8),dimension(0:ns_unit,0:n_sites-1)::m,theta,phi,charge_confs
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   hamiltonian(:,:) = cmplx(0.0,0.0)
 
@@ -501,14 +500,14 @@ implicit none
     mz2 = m(2,i) *  cos(theta(2,i))
     
     !! for up spins
-    hamiltonian(id0,id0) =  -(mu-0.5*u_int) - (0.5*u_int)*mz0
-    hamiltonian(id1,id1) =  -(mu-0.5*u_int) - (0.5*u_int)*mz1
-    hamiltonian(id2,id2) =  -(mu-0.5*u_int) - (0.5*u_int)*mz2
+    hamiltonian(id0,id0) =  -(-charge_confs(0,i)) - (0.5*u_int)*mz0
+    hamiltonian(id1,id1) =  -(-charge_confs(1,i)) - (0.5*u_int)*mz1
+    hamiltonian(id2,id2) =  -(-charge_confs(2,i)) - (0.5*u_int)*mz2
 
     !! for down spins
-    hamiltonian(id0n,id0n) =  -(mu-0.5*u_int) + (0.5*u_int)*mz0
-    hamiltonian(id1n,id1n) =  -(mu-0.5*u_int) + (0.5*u_int)*mz1
-    hamiltonian(id2n,id2n) =  -(mu-0.5*u_int) + (0.5*u_int)*mz2
+    hamiltonian(id0n,id0n) = -(-charge_confs(0,i)) + (0.5*u_int)*mz0
+    hamiltonian(id1n,id1n) = -(-charge_confs(1,i)) + (0.5*u_int)*mz1
+    hamiltonian(id2n,id2n) = -(-charge_confs(2,i)) + (0.5*u_int)*mz2
 
     ! setting the updn and dnup components for site 0 in the unit cell
     hamiltonian(id0,id0n) = -(0.5*u_int)*cmplx(mx0,-my0)
@@ -629,7 +628,7 @@ end subroutine haminitOutunitcell
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!initializing the cluster hamiltonian!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine cluster_ham(site_clster,L,n_sites,cls_sites,hamil_cls,cls_dim,&
+subroutine cluster_ham(mu,site_clster,L,n_sites,cls_sites,hamil_cls,cls_dim,&
   t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
 implicit none
   integer(8) :: cls_dim,L, cls_sites,n_sites,ns_unit
@@ -641,7 +640,7 @@ implicit none
   integer(8) :: sic, sicn , clsi,clsin
   integer(8) :: sic1 , sicn1 , clsi1 , clsin1 
   integer(8) :: sic2 , sicn2 , clsi2 , clsin2 
-  real(8) :: t_hopping ! hopping strength
+  real(8) :: t_hopping,mu ! hopping strength
   !! arrays with all sites and the sites in the cluster
   integer(8),dimension(0:n_sites-1,0:cls_dim-1) :: cl_st
 
@@ -699,16 +698,16 @@ implicit none
 
 
       !!! diagonal part of the hamiltonian for upup and dndn for site 0
-      hamil_cls(sic,sic)=hamiltonian(clsi,clsi)  !! term that is mz
-      hamil_cls(sicn,sicn)=hamiltonian(clsin,clsin) !! term that is -mz
+      hamil_cls(sic,sic)=hamiltonian(clsi,clsi) - mu  !! term that is mz
+      hamil_cls(sicn,sicn)=hamiltonian(clsin,clsin) - mu !! term that is -mz
 
       !!! diagonal part of the hamiltonian for upup and dndn for site 1
-      hamil_cls(sic1,sic1)=hamiltonian(clsi1,clsi1)
-      hamil_cls(sicn1,sicn1)=hamiltonian(clsin1,clsin1)
+      hamil_cls(sic1,sic1)=hamiltonian(clsi1,clsi1) - mu
+      hamil_cls(sicn1,sicn1)=hamiltonian(clsin1,clsin1) - mu
 
       !!! diagonal part of the hamiltonian for upup and dndn for site 2
-      hamil_cls(sic2,sic2)=hamiltonian(clsi2,clsi2)
-      hamil_cls(sicn2,sicn2)=hamiltonian(clsin2,clsin2)
+      hamil_cls(sic2,sic2)=hamiltonian(clsi2,clsi2) - mu
+      hamil_cls(sicn2,sicn2)=hamiltonian(clsin2,clsin2) - mu
 
       !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
     end do
