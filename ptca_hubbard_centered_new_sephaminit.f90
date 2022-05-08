@@ -9,6 +9,7 @@ program ptca_repulsive
   integer :: my_id,num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
+  real(8) :: mu_init,sum_mu=0.0,mu_avg,mu
   integer(8),parameter :: ns_unit = 3
   integer(8),parameter :: L = 12 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
@@ -27,8 +28,7 @@ program ptca_repulsive
   real(8),parameter :: t_min = 0.28 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
-  real(8),parameter :: u_int = 0.0
-  real(8),parameter :: mu = 0.0
+  real(8),parameter :: u_int = 1.0
   real(8),parameter :: m_max=2.0_8,m_min=0.0_8
   real :: t_strt_equil, t_end_equil
   real :: t_strt_meas , t_end_meas
@@ -53,7 +53,7 @@ program ptca_repulsive
   real(8),dimension(0:ns_unit-1,0:n_sites-1) :: charge_confs !! to store charge configurations
 !!!!!!!!!!!!!!! full hamiltonian and cluster hamiltonian !!!!!!!!!!!!
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls,copy_ham
 
 !!!!!!!!!!!!!!!  parameters for the lapack !!!!!!!!!!!!!!!!!!!!!!!!!
 integer(8),parameter :: lwork  = (2*dim_clsh)+(dim_clsh**2)
@@ -121,6 +121,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
   
     !! initialize the temperature and we will loop over this
     tvar  = temp
+    mu = 0.0
     !!! temperature loop over all the temperatures
     do while (tvar > t_min)
       print *,tvar,"started"
@@ -155,9 +156,24 @@ integer, dimension(MPI_STATUS_SIZE)::status
             call cluster_ham(mu,site_clster,L,n_sites,cls_sites, hamil_cls,cls_dim,&
                 t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
             
+            !!! for first 20 steps calculate the mu and use if for rest of the iterations
+            if (i<5) then
+              copy_ham(:,:) = hamil_cls(:,:)
+              call zheevd('V','U', dim_clsh, copy_ham, dim_clsh, egval, work, lwork, &
+                                           rwork, lrwork, iwork, liwork, info)
+      
+              mu_init = 0.5 *(egval(int(0.5*dim_clsh)+1)+egval(int(0.5*dim_clsh)))
+              sum_mu  = sum_mu + mu_init
+              mu = mu_init
+            print *,my_id,i,j,ki,egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh))
+
+            else  
+              mu_avg = sum_mu/5.0
+              mu = mu_avg 
+            end if 
             !!  try to update the mc variables at the given site
-            call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
-                 cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
+            !call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
+            !     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
 
 !          print *,'bb',m(site_clster),my_id,site_clster
           end do
@@ -939,7 +955,7 @@ end subroutine lattice_splt
 !! ---------------------------------------------------------------------------!!
 !! -------------------- monte carlo sweep--------------------------------------!!
 !! ---------------------------------------------------------------------------!!
-subroutine mc_sweep(sum_mu,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
+subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
      cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
  implicit none
   integer(8) :: dim_h,dim_clsh,n_sites,site_clster,cls_dim,ns_unit,si
@@ -975,17 +991,17 @@ subroutine mc_sweep(sum_mu,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,ph
   !!! updating first site in the unit cell
   si = 0 
   call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
-     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit,mu)
+     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
   
   !!! trying to update the second site in the unit cell
   si = 1 
   call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
-     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit,mu)
+     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
   
   !!! trying to update the third site in the unit cell
   si = 2
   call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
-     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit,mu)
+     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
   
 end subroutine mc_sweep
 !! ---------------------------------------------------------------------------!!
