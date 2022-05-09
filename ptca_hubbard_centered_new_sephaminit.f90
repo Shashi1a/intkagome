@@ -28,7 +28,7 @@ program ptca_repulsive
   real(8),parameter :: t_min = 0.28 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
-  real(8),parameter :: u_int = 0.0
+  real(8),parameter :: u_int = 2.0
   real(8),parameter :: m_max=2.0_8,m_min=0.0_8
   real :: t_strt_equil, t_end_equil
   real :: t_strt_meas , t_end_meas
@@ -160,10 +160,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
                 t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
             call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
                                            rwork, lrwork, iwork, liwork, info)
-            !print *,ki,my_id,site_clster,(site_clster*ns_unit),egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0),mu
+            print *,ki,my_id,site_clster,(site_clster*ns_unit),egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0) &
+            !print*,egval(30:dim_clsh-1)
 
             
-                                           !!! for first 20 steps calculate the mu and use if for rest of the iterations
+            !!! for first 20 steps calculate the mu and use if for rest of the iterations
             !if (i>100) then
              ! copy_ham(:,:) = hamil_cls(:,:)
              ! call zheevd('V','U', dim_clsh, copy_ham, dim_clsh, egval, work, lwork, &
@@ -674,7 +675,7 @@ implicit none
   hamil_cls(:,:)=cmplx(0.0,0.0)
   
   !! constructing the cluster hamiltonian
-  do i = 0, cls_dim-1, 1
+  do i = 0,-1, 1
       x = mod(i,cls_sites) ! x index in the  site cluster x --> [0,1,cls_sites-1]
       y = i/cls_sites       ! y index in the  site cluster y --> [0,1,cls_sites-1]
       si = x+(cls_sites*y)  ! site produced in the  site cluster si-->[0,cls_dim-1]
@@ -698,8 +699,8 @@ implicit none
       !!! diagonal part of the cluster hamiltonian !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       !!! setting up the up,down and down up terms for the 1st site in the unit cell.
 
-      sic = si*ns_unit ; sicn = sic + cls_dim  !! index of a site 0 in the cluster for up and dn spin
-      clsi = cl_st(site_clster,si)*ns_unit ; clsin = clsi +n_sites  !! index of site 0 in the lattice for up and dn spin
+      sic = si*ns_unit ; sicn = sic + (ns_unit*cls_dim)  !! index of a site 0 in the cluster for up and dn spin
+      clsi = cl_st(site_clster,si)*ns_unit ; clsin = clsi +(ns_unit*n_sites) !! index of site 0 in the lattice for up and dn spin
 
 
       sic1 = sic + 1 ; sicn1 = sicn+1 !! index of site1 in the cluster for up and down spin
@@ -732,8 +733,8 @@ implicit none
       !!! diagonal part of the hamiltonian for upup and dndn for site 2
       hamil_cls(sic2,sic2)=hamiltonian(clsi2,clsi2) - mu
       hamil_cls(sicn2,sicn2)=hamiltonian(clsin2,clsin2) - mu
-
-      print *,si,cl_st(site_clster,si),site_clster
+      
+      !print *,si,cl_st(site_clster,si),site_clster
     end do
     call hamclsinitinUnitcell(ns_unit,hamil_cls,t_hopping,cls_dim,dim_clsh,cls_sites)
     call hamclsinitOutunitcell(hamil_cls,ns_unit,n_sites,t_hopping,dim_clsh,cls_dim,cls_sites)
@@ -759,7 +760,8 @@ subroutine hamclsinitinUnitcell(ns_unit,hamil_cls,t_hopping,cls_dim,dim_clsh,cls
 
       nsi0 = ns_unit*si ; nsi1 = nsi0+1 ; nsi2 = nsi0+2
       nsi0c = nsi0+(ns_unit*cls_dim) ; nsi1c = nsi1+(ns_unit*cls_dim) ;  nsi2c = nsi2+(ns_unit*cls_dim)
-
+      !print *,nsi0,nsi1,nsi2,nsi0c,nsi1c,nsi2c
+      
       !! 0--->1 & 0--->2 for spin up in the unit cell at si
       hamil_cls(nsi0,nsi1) = -t_hopping
       hamil_cls(nsi0,nsi2) = -t_hopping
