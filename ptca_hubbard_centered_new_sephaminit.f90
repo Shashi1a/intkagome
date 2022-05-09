@@ -11,24 +11,24 @@ program ptca_repulsive
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
   real(8) :: mu_init,sum_mu=0.0,mu_avg,mu
   integer(8),parameter :: ns_unit = 3
-  integer(8),parameter :: L = 12 !! system size
+  integer(8),parameter :: L = 6 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
   integer(8),parameter :: cls_sites =  4 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
   integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
   integer(8),parameter :: split_sites = n_sites/n_splits
   integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
-  integer(8),parameter :: n_equil  = 10 !! no of equilibrium steps
-  integer(8),parameter :: n_meas  = 10 !! no of measurements
-  integer(8),parameter :: meas_skip = 1 ! make measurement after this mc cycles
+  integer(8),parameter :: n_equil  = 0 !! no of equilibrium steps
+  integer(8),parameter :: n_meas  = 0 !! no of measurements
+  integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
   integer(8),parameter :: dim_h = 6*n_sites  ! dimensionality of hamiltonian
   integer(8),parameter :: dim_clsh = 6*cls_dim ! dimensionality of cluster hamiltonian
   real(8),parameter :: temp = 0.30  !! simulation temperature
-  real(8),parameter :: dtemp = 0.01 !! temperature step to lower the temperature
+  real(8),parameter :: dtemp = 0.30 !! temperature step to lower the temperature
   real(8),parameter :: t_min = 0.28 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
-  real(8),parameter :: u_int = 1.0
+  real(8),parameter :: u_int = 0.0
   real(8),parameter :: m_max=2.0_8,m_min=0.0_8
   real :: t_strt_equil, t_end_equil
   real :: t_strt_meas , t_end_meas
@@ -116,6 +116,9 @@ integer, dimension(MPI_STATUS_SIZE)::status
     !! subroutine to initialize the arrays with sites splits in 4 subgroup 
     call cluster_sites(cls_sites,L,n_sites,cl_st,cls_dim)
 
+    !do j=0,15,1
+    !  print * ,my_id, j ,cl_st(8,j)
+    !end do
     !! subroutine to split the lattice based on the cluster dimensions
     call  lattice_splt(split_sites,n_splits,n_sites,ncl_by2,sites_array,L)
   
@@ -155,22 +158,26 @@ integer, dimension(MPI_STATUS_SIZE)::status
             !!  initialize cluster hamiltonian
             call cluster_ham(mu,site_clster,L,n_sites,cls_sites, hamil_cls,cls_dim,&
                 t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
-            
-            !!! for first 20 steps calculate the mu and use if for rest of the iterations
-            if (i<5) then
-              copy_ham(:,:) = hamil_cls(:,:)
-              call zheevd('V','U', dim_clsh, copy_ham, dim_clsh, egval, work, lwork, &
+            call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
                                            rwork, lrwork, iwork, liwork, info)
-      
-              mu_init = 0.5 *(egval(int(0.5*dim_clsh)+1)+egval(int(0.5*dim_clsh)))
-              sum_mu  = sum_mu + mu_init
-              mu = mu_init
-            print *,my_id,i,j,ki,egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh))
+            !print *,ki,my_id,site_clster,(site_clster*ns_unit),egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0),mu
 
-            else  
-              mu_avg = sum_mu/5.0
-              mu = mu_avg 
-            end if 
+            
+                                           !!! for first 20 steps calculate the mu and use if for rest of the iterations
+            !if (i>100) then
+             ! copy_ham(:,:) = hamil_cls(:,:)
+             ! call zheevd('V','U', dim_clsh, copy_ham, dim_clsh, egval, work, lwork, &
+             !                              rwork, lrwork, iwork, liwork, info)
+      
+            !  mu_init = 0.5 *(egval(int(0.5*dim_clsh)+1)+egval(int(0.5*dim_clsh)))
+            !  sum_mu  = sum_mu + mu_init
+            !  mu = mu_init
+            !print *,my_id,i,j,ki,egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0)
+
+            !else  
+            !  mu_avg = sum_mu/5.0
+            !  mu = mu_avg 
+            !end if 
             !!  try to update the mc variables at the given site
             !call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
             !     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
@@ -726,7 +733,7 @@ implicit none
       hamil_cls(sic2,sic2)=hamiltonian(clsi2,clsi2) - mu
       hamil_cls(sicn2,sicn2)=hamiltonian(clsin2,clsin2) - mu
 
-      !print *,si,si+cls_dim!,cl_st(site_clster,si),cl_st(site_clster,si)+n_sites
+      print *,si,cl_st(site_clster,si),site_clster
     end do
     call hamclsinitinUnitcell(ns_unit,hamil_cls,t_hopping,cls_dim,dim_clsh,cls_sites)
     call hamclsinitOutunitcell(hamil_cls,ns_unit,n_sites,t_hopping,dim_clsh,cls_dim,cls_sites)
@@ -982,13 +989,8 @@ subroutine mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charg
 
   ! position of global site in the cluster (center)
   loc_site = int((0.5*cls_sites)+cls_sites*(0.5*cls_sites))
-  temp_ham = hamil_cls
-  call zheevd('V','U', dim_clsh, temp_ham, dim_clsh, egval, work, lwork, &
-                                           rwork, lrwork, iwork, liwork, info)
-  
-  mu = 0.5*(egval(int(0.5*dim_clsh)+1)+egval(int(0.5*dim_clsh)))
 
-  !!! updating first site in the unit cell
+    !!! updating first site in the unit cell
   si = 0 
   call mcsweepUnitCell(loc_site,cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
      cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,si,ns_unit)
@@ -1095,6 +1097,10 @@ implicit none
   call zheevd('V','U', dim_clsh, temp_clsham, dim_clsh, egval, work, lwork, &
                                            rwork, lrwork, iwork, liwork, info)
   
+  
+  
+  !print *,site_clster,(site_clster*ns_unit)+si,egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0),mu
+  !print *,ns_unit,si,si+(ns_unit*site_clster),site_clster
   !!! call subroutine to calculate the energy
   call enr_calc(egval,dim_clsh,loc_m,n_sites,cl_st,cls_dim,enr_loc,site_clster,tvar,u_int,ns_unit)
   e_v = enr_loc
@@ -1121,6 +1127,12 @@ implicit none
     hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
     hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
 
+    !! updating the full hamiltonian with the new monte carlo variables  
+    hamiltonian(silt,silt) = -(mu-charge_confs(si,site_clster)) - (0.5*u_int)*mz
+    hamiltonian(siltn,siltn) = -(mu-charge_confs(si,site_clster)) + (0.5*u_int)*mz
+    hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
+    hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
+
   else 
     !! if the energy is not lowered update the site with the probability exp(-beta*delE)
     call random_number(mc_prob)
@@ -1137,6 +1149,13 @@ implicit none
         !! updating the cluster hamiltonian 
         hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
         hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
+
+        !! updating the full hamiltonian with the new monte carlo variables
+        hamiltonian(silt,silt) = -(mu-charge_confs(si,site_clster)) - (0.5*u_int)*mz
+        hamiltonian(siltn,siltn) = -(mu-charge_confs(si,site_clster)) + (0.5*u_int)*mz
+        hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
+        hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
+
 
     end if
   end if
