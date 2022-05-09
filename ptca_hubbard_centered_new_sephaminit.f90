@@ -9,7 +9,7 @@ program ptca_repulsive
   integer :: my_id,num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
-  real(8) :: mu_init,sum_mu=0.0,mu_avg,mu
+  real(8) :: mu_init,sum_mu=0.0,mu_avg=0.0,mu=0.0
   integer(8),parameter :: ns_unit = 3
   integer(8),parameter :: L = 6 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
@@ -28,7 +28,7 @@ program ptca_repulsive
   real(8),parameter :: t_min = 0.28 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
-  real(8),parameter :: u_int = 2.0
+  real(8),parameter :: u_int = 5.0
   real(8),parameter :: m_max=2.0_8,m_min=0.0_8
   real :: t_strt_equil, t_end_equil
   real :: t_strt_meas , t_end_meas
@@ -47,11 +47,12 @@ program ptca_repulsive
   integer(8),dimension(0:n_splits-1,0:split_sites-1) :: sites_array !! array to store information about the split sites
 
   !!!!!!!!!!!!!!!!!! variational parameters of the monte carlo procedure !!!!!!!!
-  real(8),dimension(0:ns_unit-1,0:n_sites-1):: m,m_loc   !! m
-  real(8),dimension(0:ns_unit-1,0:n_sites-1):: theta,loc_theta !! theta
-  real(8),dimension(0:ns_unit-1,0:n_sites-1):: phi,loc_phi  !! phi
-  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: charge_confs !! to store charge configurations
-!!!!!!!!!!!!!!! full hamiltonian and cluster hamiltonian !!!!!!!!!!!!
+  real(8),dimension(0:ns_unit*n_sites-1):: m ,m_loc  !! m
+  real(8),dimension(0:ns_unit*n_sites-1):: theta,loc_theta !! theta
+  real(8),dimension(0:ns_unit*n_sites-1):: phi,loc_phi  !! phi
+  real(8),dimension(0:ns_unit*n_sites-1) :: charge_confs !! to store charge configurations
+
+  !!!!!!!!!!!!!!! full hamiltonian and cluster hamiltonian !!!!!!!!!!!!
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls,copy_ham
 
@@ -74,6 +75,7 @@ character(len=200):: fname
 integer :: ierr
 integer, dimension(MPI_STATUS_SIZE)::status
 
+   !call modules_Test()
    call MPI_INIT(ierr)
    call MPI_COMM_SIZE(MPI_COMM_WORLD,num_procs,ierr)
    call MPI_COMM_RANK(MPI_COMM_WORLD,my_id,ierr)
@@ -83,13 +85,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
     
     !! subroutinee to initialize the mc variables(m,theta,phi) at each site
     if (my_id == 0) then
-        call mcvar_init(ns_unit,n_sites,m,theta,phi,pi,m_min,m_max)
+        call mcvar_init(charge_confs,u_int,ns_unit,n_sites,m,theta,phi,pi,m_min,m_max)
     end if
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-    
-    !! setting all charge configuration values as 1.5*U
-    charge_confs(:,:) = 1.5*u_int
-    
+
+
     !! synchronize all the processes and broadcast m configuration
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     call MPI_BCAST(m,ns_unit*n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
@@ -102,6 +102,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     call MPI_BCAST(phi,ns_unit*n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
 
+    call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+    call MPI_BCAST(charge_confs,ns_unit*n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
 
     !! subroutine to initialize the full lattice hamiltonian (2L*L,2*L*L) by all processes
     !! since we have broadcasted monte carlo variables to all processes all of them will 
@@ -110,6 +112,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
     call ham_init(charge_confs,right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h,ns_unit)
     
+    print*,hamiltonian(96,204)
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
@@ -134,7 +137,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
       call cpu_time(t_strt_equil)
       !!! Equlibration cycle
       
-      do i = 0, n_equil, 1
+      do i = 0, 1, 1
        !! loop over all the splits 
         do j=0,n_splits-1,1
           !! intializing changed vars to -1 and broadcast it to all the processes
@@ -160,7 +163,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
                 t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
             call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
                                            rwork, lrwork, iwork, liwork, info)
-            print *,ki,my_id,site_clster,(site_clster*ns_unit),egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0) &
+            print *,ki,my_id,site_clster,egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0) ,egval(cls_dim)
             !print*,egval(30:dim_clsh-1)
 
             
@@ -200,15 +203,15 @@ integer, dimension(MPI_STATUS_SIZE)::status
               !! loop over the loc_ids array and get the site index that is updated
               do ki=0,split_sites-1,1
                 if (loc_ids(ki)>=0) then
-                  m(0,loc_ids(ki)) = m_loc(0,loc_ids(ki))
-                  m(1,loc_ids(ki)) = m_loc(1,loc_ids(ki))
-                  m(2,loc_ids(ki)) = m_loc(2,loc_ids(ki))
-                  theta(0,loc_ids(ki)) = loc_theta(0,loc_ids(ki))
-                  theta(1,loc_ids(ki)) = loc_theta(1,loc_ids(ki))
-                  theta(2,loc_ids(ki)) = loc_theta(2,loc_ids(ki))
-                  phi(0,loc_ids(ki)) = loc_phi(0,loc_ids(ki))
-                  phi(1,loc_ids(ki)) = loc_phi(1,loc_ids(ki))
-                  phi(2,loc_ids(ki)) = loc_phi(2,loc_ids(ki))
+                  m(0+loc_ids(ki)*ns_unit) = m_loc(0+loc_ids(ki)*ns_unit)
+                  m(1+loc_ids(ki)*ns_unit) = m_loc(1+loc_ids(ki)*ns_unit)
+                  m(2+loc_ids(ki)*ns_unit) = m_loc(2+loc_ids(ki)*ns_unit)
+                  theta(0+loc_ids(ki)*ns_unit) = loc_theta(0+loc_ids(ki)*ns_unit)
+                  theta(1+loc_ids(ki)*ns_unit) = loc_theta(1+loc_ids(ki)*ns_unit)
+                  theta(2+loc_ids(ki)*ns_unit) = loc_theta(2+loc_ids(ki)*ns_unit)
+                  phi(0+loc_ids(ki)*ns_unit) = loc_phi(0+loc_ids(ki)*ns_unit)
+                  phi(1+loc_ids(ki)*ns_unit) = loc_phi(1+loc_ids(ki)*ns_unit)
+                  phi(2+loc_ids(ki)*ns_unit) = loc_phi(2+loc_ids(ki)*ns_unit)
                 endif
               enddo
             end do
@@ -240,8 +243,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
         !! initializing the most updated hamiltonian using the updated
         !! monte carlo configurations of m,theta and phi
-        call ham_init(charge_confs,right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
-                            mu,u_int,m,theta,phi,dim_h,ns_unit)
+        !call ham_init(charge_confs,right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
+        !                    mu,u_int,m,theta,phi,dim_h,ns_unit)
         end do
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         
@@ -267,7 +270,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
       !!! measurement cycle
       call cpu_time(t_strt_meas)
-      do i = 0,n_meas , 1
+      do i = 0,-1 , 1
         print *,'measurement loop with temp',tvar
         !! loop over all partition of the lattice
         
@@ -293,8 +296,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
                             t_hopping,hamiltonian,dim_h,dim_clsh,cl_st,ns_unit)
 
             !!     try to update the mc variables at the given site
-            call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
-                 cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
+            !call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,charge_confs,site_clster,&
+            !     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max,ns_unit)
 
             !! loop over the sites in each non-interacting split of the lattice
             end do
@@ -313,15 +316,15 @@ integer, dimension(MPI_STATUS_SIZE)::status
               !!! set the variables arrays in master using values from other slave processes
               do ki=0,split_sites-1,1
               if (loc_ids(ki)>=0) then
-                m(0,loc_ids(ki)) = m_loc(0,loc_ids(ki))
-                m(1,loc_ids(ki)) = m_loc(1,loc_ids(ki))
-                m(2,loc_ids(ki)) = m_loc(2,loc_ids(ki))
-                theta(0,loc_ids(ki)) = loc_theta(0,loc_ids(ki))
-                theta(1,loc_ids(ki)) = loc_theta(1,loc_ids(ki))
-                theta(2,loc_ids(ki)) = loc_theta(2,loc_ids(ki))
-                phi(0,loc_ids(ki)) = loc_phi(0,loc_ids(ki))
-                phi(1,loc_ids(ki)) = loc_phi(1,loc_ids(ki))
-                phi(2,loc_ids(ki)) = loc_phi(2,loc_ids(ki))              
+                m(0+loc_ids(ki)*ns_unit) = m_loc(0+loc_ids(ki)*ns_unit)
+                m(1+loc_ids(ki)*ns_unit) = m_loc(1+loc_ids(ki)*ns_unit)
+                m(2+loc_ids(ki)*ns_unit) = m_loc(2+loc_ids(ki)*ns_unit)
+                theta(0+loc_ids(ki)*ns_unit) = loc_theta(0+loc_ids(ki)*ns_unit)
+                theta(1+loc_ids(ki)*ns_unit) = loc_theta(1+loc_ids(ki)*ns_unit)
+                theta(2+loc_ids(ki)*ns_unit) = loc_theta(2+loc_ids(ki)*ns_unit)
+                phi(0+loc_ids(ki)*ns_unit) = loc_phi(0+loc_ids(ki)*ns_unit)
+                phi(1+loc_ids(ki)*ns_unit) = loc_phi(1+loc_ids(ki)*ns_unit)
+                phi(2+loc_ids(ki)*ns_unit) = loc_phi(2+loc_ids(ki)*ns_unit)              
                endif
               enddo
             end do
@@ -356,8 +359,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
           !! initializing the most updated hamiltonian using the updated
           !! monte carlo configurations of m,theta and phi
-          call ham_init(charge_confs,right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
-                            mu,u_int,m,theta,phi,dim_h,ns_unit)
+          !call ham_init(charge_confs,right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,&
+          !                  mu,u_int,m,theta,phi,dim_h,ns_unit)
         
         !!! loop end for all the splits
         end do    
@@ -372,7 +375,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
           open(16,file=fname,action='write',position='append')
           do j=0,n_sites-1,1
-            write(16,20) i,j,m(0,j),m(1,j),m(2,j),theta(0,j),theta(1,j),theta(2,j),phi(0,j),phi(1,j),phi(2,j)
+            write(16,20) i,j,m(0+j*ns_unit),m(1+j*ns_unit),m(2+ns_unit*j),theta(0+j*ns_unit),theta(1+j*ns_unit),theta(2+j*ns_unit),&
+            phi(0+j*ns_unit),phi(1+j*ns_unit),phi(2+j*ns_unit)
             20  format(I4,2X,I4,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8)
           end do
           close(16)
@@ -413,6 +417,7 @@ end program ptca_repulsive
 !!!!!!!!!!!!!!!!!!!!!!!!!!! setting up the neighbour table!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine neighbour_table(right,left,up,down,L,n_sites,sites,right_up,left_down)
+
 implicit none
     integer(8) :: i,xi,yi,ri,li,ui,di
     integer(8) :: L
@@ -447,12 +452,13 @@ end subroutine neighbour_table
 !! ---------------------------------------------------------------------------!!
 !! -------------------- initialize monte carlo variables----------------------!!
 !! ---------------------------------------------------------------------------!!
-subroutine mcvar_init(ns_unit,n_sites,m,theta,phi,pi,m_min,m_max)
+subroutine mcvar_init(charge_confs,u_int,ns_unit,n_sites,m,theta,phi,pi,m_min,m_max)
 implicit none
-  integer(8) :: n_sites,i,ns_unit,j
-  real(8) :: pi,m_min,m_max
+  
+  integer(8) :: n_sites,i,ns_unit,j,si
+  real(8) :: pi,m_min,m_max,u_int
   real(8):: rand3,rand1,rand2,rand_int3,rand_int1,rand_int2
-  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi  
+  real(8),dimension(0:ns_unit*n_sites-1) :: m,theta,phi,charge_confs
 
   !! initialize the initial configuration of the monte carlo variables
   !! loop over the sites in the lattice
@@ -464,14 +470,16 @@ implicit none
     call random_number(rand2)
     call random_number(rand3)
     
+    si = (i*ns_unit) + j
     rand_int1=int(rand1*5000)
-    m(j,i)=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
+    m(si)=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
 
     rand_int2=int(rand2*1000)
-    theta(j,i)=acos(-1.0_8+(rand_int2/500.0))
+    theta(si)=acos(-1.0_8+(rand_int2/500.0))
 
     rand_int3=int(rand3*2000)
-    phi(j,i)=(2.0_8*pi)*(rand_int3/2000.0)
+    phi(si)=(2.0_8*pi)*(rand_int3/2000.0)
+    charge_confs(si) = 1.5*u_int
     end do
   end do
 end subroutine mcvar_init
@@ -482,6 +490,8 @@ end subroutine mcvar_init
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine ham_init(charge_confs,right,left,up,down,right_up,left_down,L,n_sites,hamiltonian,t_hopping,mu, &
                       u_int,m,theta,phi,dim_h,ns_unit)
+!subroutine ham_init()
+
 implicit none
   integer :: i,id0,id1,id2,id0n,id1n,id2n
   integer(8) :: L,ns_unit
@@ -493,7 +503,9 @@ implicit none
   real(8) ::mx0,mx1,mx2
   real(8) ::my0,my1,my2
   real(8) ::mz0,mz1,mz2
-  real(8),dimension(0:ns_unit,0:n_sites-1)::m,theta,phi,charge_confs
+  real(8),dimension(0:ns_unit*n_sites-1) :: m,theta,phi,charge_confs
+
+
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   hamiltonian(:,:) = cmplx(0.0,0.0)
 
@@ -503,36 +515,38 @@ implicit none
     !! sites in the unit cell
     id0 = (ns_unit*i) 
     id0n = id0 + (ns_unit*n_sites)
-    id1 = (ns_unit*i)+1 
+    id1 = id0+1 
     id1n = id1 + (ns_unit*n_sites)
-    id2 = (ns_unit*i)+2
+    id2 = id0+2
     id2n = id2 + (ns_unit*n_sites)
 
 
     !!! mx for three sites in the unit cell
-    mx0 = m(0,i)  * cos(phi(0,i)) * sin(theta(0,i))
-    mx1 = m(1,i)  * cos(phi(1,i)) * sin(theta(1,i))
-    mx2 = m(2,i)  * cos(phi(2,i)) * sin(theta(2,i))
+    mx0 = m(0+i*ns_unit)  * cos(phi(0+i*ns_unit)) * sin(theta(0+i*ns_unit))
+    mx1 = m(1+i*ns_unit)  * cos(phi(1+i*ns_unit)) * sin(theta(1+i*ns_unit))
+    mx2 = m(2+i*ns_unit)  * cos(phi(2+i*ns_unit)) * sin(theta(2+i*ns_unit))
 
     !!! my for three sites in the unit cell
-    my0 = m(0,i) * sin(phi(0,i)) * sin(theta(0,i))
-    my1 = m(1,i) * sin(phi(1,i)) * sin(theta(1,i))
-    my2 = m(2,i) * sin(phi(1,i)) * sin(theta(2,i))
+    my0 = m(0+i*ns_unit) * sin(phi(0+i*ns_unit)) * sin(theta(0+i*ns_unit))
+    my1 = m(1+i*ns_unit) * sin(phi(1+i*ns_unit)) * sin(theta(1+i*ns_unit))
+    my2 = m(2+i*ns_unit) * sin(phi(2+i*ns_unit)) * sin(theta(2+i*ns_unit))
     
     !! mz for three sites in the unit cell
-    mz0 = m(0,i) *  cos(theta(0,i))
-    mz1 = m(1,i) *  cos(theta(1,i))
-    mz2 = m(2,i) *  cos(theta(2,i))
+    mz0 = m(0+i*ns_unit) *  cos(theta(0+i*ns_unit))
+    mz1 = m(1+i*ns_unit) *  cos(theta(1+i*ns_unit))
+    mz2 = m(2+i*ns_unit) *  cos(theta(2+i*ns_unit))
     
-    !! for up spins
-    hamiltonian(id0,id0) =  -(-charge_confs(0,i)) - (0.5*u_int)*mz0
-    hamiltonian(id1,id1) =  -(-charge_confs(1,i)) - (0.5*u_int)*mz1
-    hamiltonian(id2,id2) =  -(-charge_confs(2,i)) - (0.5*u_int)*mz2
+    !! diagonal element for site 0 for up and dn spins
+    hamiltonian(id0,id0) =  -(-charge_confs(0+i*ns_unit)) - (0.5*u_int)*mz0
+    hamiltonian(id0n,id0n) = -(-charge_confs(0+i*ns_unit)) + (0.5*u_int)*mz0
 
-    !! for down spins
-    hamiltonian(id0n,id0n) = -(-charge_confs(0,i)) + (0.5*u_int)*mz0
-    hamiltonian(id1n,id1n) = -(-charge_confs(1,i)) + (0.5*u_int)*mz1
-    hamiltonian(id2n,id2n) = -(-charge_confs(2,i)) + (0.5*u_int)*mz2
+    !! diagonal element for site 1 for up and dn spins
+    hamiltonian(id1,id1) =  -(-charge_confs(1+i*ns_unit)) - (0.5*u_int)*mz1
+    hamiltonian(id1n,id1n) = -(-charge_confs(1+i*ns_unit)) + (0.5*u_int)*mz1
+
+    !! diagonal element for site20 for up and dn spins
+    hamiltonian(id2,id2) =  -(-charge_confs(2+i*ns_unit)) - (0.5*u_int)*mz2
+    hamiltonian(id2n,id2n) = -(-charge_confs(2+i*ns_unit)) + (0.5*u_int)*mz2
 
     ! setting the updn and dnup components for site 0 in the unit cell
     hamiltonian(id0,id0n) = -(0.5*u_int)*cmplx(mx0,-my0)
@@ -547,8 +561,15 @@ implicit none
     hamiltonian(id2,id2n) = -(0.5*u_int)*cmplx(mx2,-my2)
     hamiltonian(id2n,id2) = -(0.5*u_int)*cmplx(mx2,my2)
 
+    
+    !print*,'h1',id0,id1,id2
+    !print*,i,'m',m(0+ns_unit*i),m(1+i*ns_unit),m(2+ns_unit*i),n_sites,ns_unit
+    !print*,'h2',id0n,id1n,id2n,theta(0,i),theta(1,32),theta(2,32)
+    !print*,i,'th',theta(0+ns_unit*i),theta(1+i*ns_unit),theta(2+ns_unit*i)
+    !print*,i,'phi',phi(0+ns_unit*i),phi(1+i*ns_unit),phi(2+ns_unit*i)
+    
   end do
-  !print *,hamiltonian
+  
 end subroutine ham_init
 
 
@@ -675,7 +696,7 @@ implicit none
   hamil_cls(:,:)=cmplx(0.0,0.0)
   
   !! constructing the cluster hamiltonian
-  do i = 0,-1, 1
+  do i = 0,cls_dim-1, 1
       x = mod(i,cls_sites) ! x index in the  site cluster x --> [0,1,cls_sites-1]
       y = i/cls_sites       ! y index in the  site cluster y --> [0,1,cls_sites-1]
       si = x+(cls_sites*y)  ! site produced in the  site cluster si-->[0,cls_dim-1]
@@ -714,8 +735,8 @@ implicit none
       hamil_cls(sicn,sic) = hamiltonian(clsin,clsi)  !! term that is mx-imy
 
       !!! setting up term between up,down for site 1 in the cluster from hamiltonian
-      hamil_cls(sic1,sicn1) = hamiltonian(clsi1,clsin1)
-      hamil_cls(sicn1,sic1) = hamiltonian(clsin1,clsi1)
+      hamil_cls(sic1,sicn1) = hamiltonian(clsi1,clsin1) 
+      hamil_cls(sicn1,sic1) = hamiltonian(clsin1,clsi1) 
 
       !!! setting up the term between up,down for site 2 in the cluster from hamiltonian
       hamil_cls(sic2,sicn2) = hamiltonian(clsi2,clsin2)
@@ -727,14 +748,22 @@ implicit none
       hamil_cls(sicn,sicn)=hamiltonian(clsin,clsin) - mu !! term that is -mz
 
       !!! diagonal part of the hamiltonian for upup and dndn for site 1
-      hamil_cls(sic1,sic1)=hamiltonian(clsi1,clsi1) - mu
+      hamil_cls(sic1,sic1)=hamiltonian(clsi1,clsi1)  - mu 
       hamil_cls(sicn1,sicn1)=hamiltonian(clsin1,clsin1) - mu
 
       !!! diagonal part of the hamiltonian for upup and dndn for site 2
       hamil_cls(sic2,sic2)=hamiltonian(clsi2,clsi2) - mu
       hamil_cls(sicn2,sicn2)=hamiltonian(clsin2,clsin2) - mu
       
+      if (site_clster==3) then
+        !print *,si,site_clster,sic,sic1,sic2,clsi,clsi1,clsi2
+        !print *,'h1',hamiltonian(clsi,clsi),hamiltonian(clsi1,clsi1),hamiltonian(clsi2,clsi2)
+        !print *,'h2',hamiltonian(clsi,clsin),hamiltonian(clsi1,clsin1),hamiltonian(clsi2,clsin2)  
+        !print *,'h2s',clsi,clsin,clsi1,clsin1,clsi2,clsin2
+      
+        !print *,clsi2,clsi2,clsin2,clsin2
       !print *,si,cl_st(site_clster,si),site_clster
+      end if
     end do
     call hamclsinitinUnitcell(ns_unit,hamil_cls,t_hopping,cls_dim,dim_clsh,cls_sites)
     call hamclsinitOutunitcell(hamil_cls,ns_unit,n_sites,t_hopping,dim_clsh,cls_dim,cls_sites)
@@ -1215,7 +1244,7 @@ end subroutine enr_calc
 !!-----------------------------------------------------------------------------!!
 !!-------------------- printing -----------------------------------------------!!
 !!-----------------------------------------------------------------------------!!
- subroutine print_f(fname,u_int,tvar,L,cls_sites)
+subroutine print_f(fname,u_int,tvar,L,cls_sites)
    integer(8)::L,cls_sites
    real(8):: u_int,tvar
    character(len=50) :: format_L
@@ -1255,4 +1284,12 @@ end subroutine enr_calc
                      //trim(str_3)//trim('_cluster')//trim(str_4)
 !   print*,fname
 
- end subroutine
+ end subroutine print_f
+
+!subroutine modules_Test
+!  use varmodule 
+ ! implicit none 
+!  print * , L, n_sites
+!  print *,cls_dim
+!  print *,cls_dim+n_sites
+!end subroutine modules_Test
