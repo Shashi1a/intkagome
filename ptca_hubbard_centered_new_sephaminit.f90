@@ -82,29 +82,31 @@ use varmodule
 
       !! time when the equilibration started
       call cpu_time(t_strt_equil)
+      open(81,file='mucalc_L8_cl_6.dat',action='write',position='append')
       !!! Equlibration cycle
-     
-
       do i = 0, n_equil, 1
-      
+
         !!! for first 20 steps calculate the mu and use if for rest of the iterations
         !!! form a cluster centered around site 0
         if (i<mu_cnf) then
+            
             site_clster = 15
             mu = 0.0
             call cluster_ham(site_clster)
             info  = 10
             call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
                                            rwork, lrwork, iwork, liwork, info)
-      
+            
             mu_init = 0.5 *(egval(int(0.5*dim_clsh)-1)+egval(int(0.5*dim_clsh)))
             mu = mu_init
             sum_mu  = sum_mu + mu_init
-            print *,my_id,i,mu
+            !print *,my_id,i,mu,int(0.5*dim_clsh)
+            write(81,*) tvar,i,mu_init
         else  
             mu_avg = sum_mu/mu_cnf
-            mu = mu_avg 
-            !print *,i,my_id,mu,mu_avg
+            mu = mu_avg
+            write(81,*) tvar,i,mu 
+            !print *,i,my_id,mu,mu_avg,int(0.5*dim_clsh)
         end if
         
         !!! loop over all the splits 
@@ -121,9 +123,11 @@ use varmodule
           call MPI_BCAST(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           !! loop over all the sites within the partition
+          print *,i,j
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
+            
             !print *,'before sweep',my_id,site_clster
             !!  initialize cluster hamiltonian
             call cluster_ham(site_clster)
@@ -193,7 +197,7 @@ use varmodule
         
       
       end do
-      
+      close(81)
       call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
       !! time when the equilibration cycle finishes
@@ -296,7 +300,6 @@ use varmodule
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           call MPI_BCAST(phi,ns_unit*n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
   
-          
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
           !! initializing the most updated hamiltonian using the updated
@@ -974,7 +977,7 @@ implicit none
                                            rwork, lrwork, iwork, liwork, info)
   
   !!! call subroutine to calculate the energy
-  call enr_calc(loc_m,enr_loc,site_clster,tvar)
+  call enr_calc(loc_m,enr_loc,site_clster)
   e_u = enr_loc
    
   !! copying the cluster hamiltonian 
@@ -1028,8 +1031,8 @@ implicit none
     hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
 
     !! updating the full hamiltonian with the new monte carlo variables  
-    hamiltonian(silt,silt) = -(mu-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
-    hamiltonian(siltn,siltn) = -(mu-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
+    hamiltonian(silt,silt) = -(-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
+    hamiltonian(siltn,siltn) = -(-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
     hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
     hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
 
@@ -1051,8 +1054,8 @@ implicit none
         hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
 
         !! updating the full hamiltonian with the new monte carlo variables
-        hamiltonian(silt,silt) = -(mu-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
-        hamiltonian(siltn,siltn) = -(mu-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
+        hamiltonian(silt,silt) = -(-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
+        hamiltonian(siltn,siltn) = -(-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
         hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
         hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
 

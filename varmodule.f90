@@ -1,27 +1,30 @@
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!-------------- module to store the variables used during the monte carlo procedure -----------!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module  varmodule
     implicit none
     integer(8),parameter :: ns_unit = 3
-    integer(8),parameter :: L = 6 !! system size
+    integer(8),parameter :: L = 8 !! system size
     integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
-    integer(8),parameter :: cls_sites =  6 !! cluster size
+    integer(8),parameter :: cls_sites =  4 !! cluster size
     integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
     integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
     integer(8),parameter :: split_sites = n_sites/n_splits
     integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
-    integer(8),parameter :: n_equil  = 30 !! no of equilibrium steps
-    integer(8),parameter :: n_meas  = 0 !! no of measurements
+    integer(8),parameter :: n_equil  = 200 !! no of equilibrium steps
+    integer(8),parameter :: n_meas  = 200 !! no of measurements
     integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
     integer(8),parameter :: dim_h = 6*n_sites  ! dimensionality of hamiltonian
     integer(8),parameter :: dim_clsh = 6*cls_dim ! dimensionality of cluster hamiltonian
-    integer(8),parameter :: mu_cnf = 20 !! monte carlo steps to set mu
+    integer(8),parameter :: mu_cnf = 25 !! monte carlo steps to set mu
     real(8),parameter :: pi = 4*atan(1.0)
     real(8),parameter :: t_hopping = 1.0
-    real(8),parameter :: u_int = 0.2
-    real(8),parameter :: m_max=2.0_8
-    real(8),parameter :: m_min=0.0_8
+    real(8),parameter :: u_int = 1.0
+    real(8),parameter :: m_max = 2.0_8
+    real(8),parameter :: m_min = 0.0_8
     real(8) :: mu  !! chemical potential
     real(8),parameter :: temp = 0.30  !! simulation temperature
-    real(8),parameter :: dtemp = 0.30 !! temperature step to lower the temperature
+    real(8),parameter :: dtemp = 0.01 !! temperature step to lower the temperature
     real(8),parameter :: t_min = 0.28 !! minimum temperature for the simulation
     real(8)  :: tvar !! variable used for varying tempreature
 
@@ -62,3 +65,5 @@ module  varmodule
 !contains
     
 end module varmodule
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
