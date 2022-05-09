@@ -48,14 +48,7 @@ module  varmodule
     !complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
     !complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls,copy_ham
 
-    !!!!!!!!!!!!!!!  parameters for the lapack !!!!!!!!!!!!!!!!!!!!!!!!!
-    integer(8),parameter :: lwork  = (2*dim_clsh)+(dim_clsh**2)
-    integer(8),parameter :: lrwork = 2*(dim_clsh**2)+(5*(dim_clsh)+1)
-    integer(8),parameter :: liwork = (5*dim_clsh)+3
-    integer(8),parameter :: info=10
-    complex(8),dimension(lwork)::work
-    real(8),dimension(lrwork) :: rwork
-    integer(8),dimension(liwork) :: iwork
+   
 !contains
     
 end module varmodule

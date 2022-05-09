@@ -19,7 +19,7 @@ use varmodule
   !!! this array will be initialized to -1 at the starting 
   !!! entry will be changed to 1 when that particular site is updated during mc
   integer(8),dimension(0:split_sites-1)::changed_ids,loc_ids
-  real(8),dimension(0:dim_h-1) :: egval
+  real(8),dimension(0:dim_clsh-1) :: egval
   
   !!!!!!!!!!!!!!!!!! initialize neighbour table !!!!!!!!!!!!!!!!!!!!!
   integer(8),dimension(0:n_sites-1)::sites
@@ -39,6 +39,14 @@ use varmodule
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls,copy_ham
 
+  integer(8),parameter :: lwork  = (2*dim_clsh)+(dim_clsh**2)
+  integer(8),parameter :: lrwork = 2*(dim_clsh**2)+(5*(dim_clsh)+1)
+  integer(8),parameter :: liwork = (5*dim_clsh)+3
+  integer(8),parameter :: info=10
+  
+  complex(8),dimension(lwork)::work
+  real(8),dimension(lrwork) :: rwork
+  integer(8),dimension(liwork) :: iwork
 
 !!!!!!!!!!!!!!!!!! files names !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 character(len=200):: fname
@@ -106,7 +114,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
       call cpu_time(t_strt_equil)
       !!! Equlibration cycle
       
-      do i = 0, 1, 1
+      do i = 0, n_equil, 1
        !! loop over all the splits 
         do j=0,n_splits-1,1
           !! intializing changed vars to -1 and broadcast it to all the processes
@@ -128,13 +136,10 @@ integer, dimension(MPI_STATUS_SIZE)::status
             !print *,'before sweep',my_id,site_clster
             !!  initialize cluster hamiltonian
             call cluster_ham(site_clster,hamil_cls,hamiltonian,cl_st)
-            
-            print *,my_id,'bf',int(0.5*dim_clsh)
+            !print *,
+            !call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork,rwork, lrwork, iwork, liwork, info)
 
-            !call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
-            !                               rwork, lrwork, iwork, liwork, info)
-            
-            print *,ki,my_id,site_clster,egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0) ,egval(dim_clsh-1)
+            !print *,ki,my_id,site_clster,egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0) ,egval(dim_clsh-1)
             !print*,egval(30:dim_clsh-1)
 
             
@@ -154,7 +159,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
             !  mu = mu_avg 
             !end if 
             !!  try to update the mc variables at the given site
-            !call  mc_sweep(hamil_cls,m,theta,phi,charge_confs,site_clster,hamiltonian,tvar,cl_st)
+            call  mc_sweep(hamil_cls,m,theta,phi,charge_confs,site_clster,hamiltonian,tvar,cl_st)
 
 !          print *,'bb',m(site_clster),my_id,site_clster
           end do
@@ -710,7 +715,7 @@ implicit none
       hamil_cls(sic2,sic2)=hamiltonian(clsi2,clsi2) - mu
       hamil_cls(sicn2,sicn2)=hamiltonian(clsin2,clsin2) - mu
       
-      if (site_clster==3) then
+      
         !print *,si,site_clster,sic,sic1,sic2,clsi,clsi1,clsi2
         !print *,'h1',hamiltonian(clsi,clsi),hamiltonian(clsi1,clsi1),hamiltonian(clsi2,clsi2)
         !print *,'h2',hamiltonian(clsi,clsin),hamiltonian(clsi1,clsin1),hamiltonian(clsi2,clsin2)  
@@ -718,7 +723,7 @@ implicit none
       
         !print *,clsi2,clsi2,clsin2,clsin2
       !print *,si,cl_st(site_clster,si),site_clster
-      end if
+      
     end do
     call hamclsinitinUnitcell(hamil_cls)
     call hamclsinitOutunitcell(hamil_cls)
@@ -998,11 +1003,18 @@ implicit none
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls 
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: temp_clsham,temp2_clsham !! to store a copy of the cluster hamiltonian 
   complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original hamiltonian
-  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi,charge_confs  !! m , theta , phi array
-  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: loc_m  !! local m array
+  real(8),dimension(0:ns_unit*n_sites-1) :: m,theta,phi,charge_confs  !! m , theta , phi array
+  real(8),dimension(0:ns_unit*n_sites-1) :: loc_m  !! local m array
   real(8),dimension(0:dim_clsh-1) :: egval !! eigenvalue array
   
-  
+  integer(8),parameter :: lwork  = (2*dim_clsh)+(dim_clsh**2)
+  integer(8),parameter :: lrwork = 2*(dim_clsh**2)+(5*(dim_clsh)+1)
+  integer(8),parameter :: liwork = (5*dim_clsh)+3
+  integer(8),parameter :: info=10
+  complex(8),dimension(lwork)::work
+  real(8),dimension(lrwork) :: rwork
+  integer(8),dimension(liwork) :: iwork
+
   call random_number(rand1)
   call random_number(rand2)
   call random_number(rand3)
@@ -1024,7 +1036,7 @@ implicit none
   mz = tempm * cos(temptheta)
   
   temp_clsham(:,:)  = hamil_cls(:,:)
-  loc_m(:,:) = m(:,:)
+  loc_m =  m
   
   !!! call diagonalization subroutine
   call zheevd('V','U', dim_clsh, temp_clsham, dim_clsh, egval, work, lwork, &
@@ -1033,7 +1045,7 @@ implicit none
   !!! call subroutine to calculate the energy
   call enr_calc(egval,loc_m,cl_st,enr_loc,site_clster,tvar)
   e_u = enr_loc
-
+  print *,egval(0)
   !! copying the cluster hamiltonian 
   temp_clsham(:,:) = cmplx(0.0,0.0)
   temp_clsham(:,:) = hamil_cls(:,:)
@@ -1042,13 +1054,13 @@ implicit none
   sil = si + (loc_site * ns_unit)  
   silc = sil + (ns_unit*cls_dim)
 
-  temp_clsham(sil,sil) =  -(mu-charge_confs(si,site_clster)) - (0.5*u_int)*mz
-  temp_clsham(silc,silc) = -(mu-charge_confs(si,site_clster)) + (0.5*u_int)*mz
+  temp_clsham(sil,sil) =  -(mu-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
+  temp_clsham(silc,silc) = -(mu-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
 
   temp_clsham(sil,silc) =  -(0.5*u_int)*cmplx(mx,-my)
   temp_clsham(silc,sil) = -(0.5*u_int)*cmplx(mx,my)
   
-  loc_m(si,site_clster) = tempm
+  loc_m(si+site_clster*ns_unit) = tempm
   
   !!! call diagonalization subroutine
   call zheevd('V','U', dim_clsh, temp_clsham, dim_clsh, egval, work, lwork, &
@@ -1072,21 +1084,21 @@ implicit none
   delE = e_v - e_u
  
   if (delE < 0.0) then
-    m(si,site_clster) = tempm  !! update m 
-    theta(si,site_clster) = temptheta !! update theta
-    phi(si,site_clster) = tempphi  !! update phi
+    m(si+site_clster*ns_unit) = tempm  !! update m 
+    theta(si+site_clster*ns_unit) = temptheta !! update theta
+    phi(si+site_clster*ns_unit) = tempphi  !! update phi
     
     !! updating the cluster hamiltonian 
-    hamil_cls(sil,sil) = -(mu-charge_confs(si,site_clster)) - (0.5*u_int)*mz
-    hamil_cls(silc,silc) = -(mu-charge_confs(si,site_clster)) + (0.5*u_int)*mz
+    hamil_cls(sil,sil) = -(mu-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
+    hamil_cls(silc,silc) = -(mu-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
 
     !! updating the cluster hamiltonian 
     hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
     hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
 
     !! updating the full hamiltonian with the new monte carlo variables  
-    hamiltonian(silt,silt) = -(mu-charge_confs(si,site_clster)) - (0.5*u_int)*mz
-    hamiltonian(siltn,siltn) = -(mu-charge_confs(si,site_clster)) + (0.5*u_int)*mz
+    hamiltonian(silt,silt) = -(mu-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
+    hamiltonian(siltn,siltn) = -(mu-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
     hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
     hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
 
@@ -1095,21 +1107,21 @@ implicit none
     call random_number(mc_prob)
     
     if (mc_prob < exp(-beta*delE)) then
-        m(si,site_clster) = tempm  !! update m 
-        theta(si,site_clster) = temptheta !! update theta
-        phi(si,site_clster) = tempphi  !! update phi
-        
+        m(si+site_clster*ns_unit) = tempm  !! update m 
+        theta(si+site_clster*ns_unit) = temptheta !! update theta
+        phi(si+site_clster*ns_unit) = tempphi  !! update phi
+    
         !! updating the cluster hamiltonian 
-        hamil_cls(sil,sil) = -(mu-charge_confs(si,site_clster)) - (0.5*u_int)*mz
-        hamil_cls(silc,silc) = -(mu-charge_confs(si,site_clster)) + (0.5*u_int)*mz
+        hamil_cls(sil,sil) = -(mu-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
+        hamil_cls(silc,silc) = -(mu-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
 
         !! updating the cluster hamiltonian 
         hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
         hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
 
         !! updating the full hamiltonian with the new monte carlo variables
-        hamiltonian(silt,silt) = -(mu-charge_confs(si,site_clster)) - (0.5*u_int)*mz
-        hamiltonian(siltn,siltn) = -(mu-charge_confs(si,site_clster)) + (0.5*u_int)*mz
+        hamiltonian(silt,silt) = -(mu-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
+        hamiltonian(siltn,siltn) = -(mu-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
         hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
         hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
 
