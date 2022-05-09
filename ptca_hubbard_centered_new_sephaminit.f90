@@ -1,74 +1,43 @@
-program ptca_repulsive
 !!!!!!!!!!!! defining parameters for the problems!!!!!!!!!!!!!!!!
 !!! in this code only m,theta and phi are transferred between the
 !!! processes and the new hamitlonian is initialized using these 
 !!! this should be able to save time compared to transferring hamiltonian also
+
+program ptca_repulsive
 use varmodule 
   implicit none
   include "mpif.h"
   integer(8) :: i,j,ki
-  integer :: my_id,num_procs
-  integer(8) :: site_clster,loc_proc
-  real(8) :: tvar,rnum !! variable used to store intermediate temperature
-  real(8) :: mu_init,sum_mu=0.0,mu_avg=0.0
-  real(8) :: mu = 0.0
+  integer :: my_id,num_procs !! process id and number of processes
+  integer(8) :: site_clster,loc_proc !! local site in the cluster
+  real(8) :: rnum                  !! variable used to store intermediate temperature
+  real(8) :: mu_init,sum_mu=0.0,mu_avg=0.0 !! mu calculations
   
+  !!!! for time calcualtions
   real :: t_strt_equil, t_end_equil
   real :: t_strt_meas , t_end_meas
   real :: delT , mu_initial 
 
-  !!! this array will be initialized to -1 at the starting 
-  !!! entry will be changed to 1 when that particular site is updated during mc
-  integer(8),dimension(0:split_sites-1)::changed_ids,loc_ids
-  real(8),dimension(0:dim_clsh-1) :: egval
-  
-  !!!!!!!!!!!!!!!!!! initialize neighbour table !!!!!!!!!!!!!!!!!!!!!
-  integer(8),dimension(0:n_sites-1)::sites
-  integer(8),dimension(0:n_sites-1):: right,left,up,down,right_up,left_down
-
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!! array that will hold all the sites in the cluster!!!
-  integer(8), dimension(0:n_sites-1,0:cls_dim-1)::cl_st ! sites in the cluster at site j
-  integer(8),dimension(0:n_splits-1,0:split_sites-1) :: sites_array !! array to store information about the split sites
-
-  !!!!!!!!!!!!!!!!!! variational parameters of the monte carlo procedure !!!!!!!!
-  real(8),dimension(0:ns_unit*n_sites-1):: m ,m_loc  !! m
-  real(8),dimension(0:ns_unit*n_sites-1):: theta,loc_theta !! theta
-  real(8),dimension(0:ns_unit*n_sites-1):: phi,loc_phi  !! phi
-  real(8),dimension(0:ns_unit*n_sites-1) :: charge_confs !! to store charge configurations
-
-  !!!!!!!!!!!!!!! full hamiltonian and cluster hamiltonian !!!!!!!!!!!!
-  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls,copy_ham
-
-  integer(8),parameter :: lwork  = (2*dim_clsh)+(dim_clsh**2)
-  integer(8),parameter :: lrwork = 2*(dim_clsh**2)+(5*(dim_clsh)+1)
-  integer(8),parameter :: liwork = (5*dim_clsh)+3
-  integer(8) :: info=10
-  
-  complex(8),dimension(lwork)::work
-  real(8),dimension(lrwork) :: rwork
-  integer(8),dimension(liwork) :: iwork
+  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: copy_ham !! copy of cluster hamiltonian
 
 !!!!!!!!!!!!!!!!!! files names !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-character(len=200):: fname
+  character(len=200):: fname
 
 !!!!!!!!!!!!!!!!!! parameters for the parallelization !!!!!!!!!!!!!!!
-integer :: ierr
-integer, dimension(MPI_STATUS_SIZE)::status
+  integer :: ierr
+  integer, dimension(MPI_STATUS_SIZE)::status
 
-   !call modules_Test()
    call MPI_INIT(ierr)
    call MPI_COMM_SIZE(MPI_COMM_WORLD,num_procs,ierr)
    call MPI_COMM_RANK(MPI_COMM_WORLD,my_id,ierr)
 
     !! calling the subroutine to initialize the neighbours
-    call neighbour_table(right,left,up,down,sites,right_up,left_down)
+    call neighbour_table()
+
     !! subroutinee to initialize the mc variables(m,theta,phi) at each site
     if (my_id == 0) then
-        call mcvar_init(charge_confs,m,theta,phi)
+        call mcvar_init()
     end if
-    call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-
 
     !! synchronize all the processes and broadcast m configuration
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -88,20 +57,20 @@ integer, dimension(MPI_STATUS_SIZE)::status
     !! subroutine to initialize the full lattice hamiltonian (2L*L,2*L*L) by all processes
     !! since we have broadcasted monte carlo variables to all processes all of them will 
     !! have the same hamiltonian.
-    
-    call ham_init(charge_confs,right,left,up,down,right_up,left_down,hamiltonian,m,theta,phi)
+    mu = 0.0
+    call ham_init()
     
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
     !! subroutine to initialize the arrays with sites splits in 4 subgroup 
-    call cluster_sites(cl_st)
+    call cluster_sites()
 
     !do j=0,15,1
     !  print * ,my_id, j ,cl_st(8,j)
     !end do
     !! subroutine to split the lattice based on the cluster dimensions
-    call lattice_splt(sites_array)
+    call lattice_splt()
   
     !! initialize the temperature and we will loop over this
     tvar  = temp
@@ -120,9 +89,10 @@ integer, dimension(MPI_STATUS_SIZE)::status
       
         !!! for first 20 steps calculate the mu and use if for rest of the iterations
         !!! form a cluster centered around site 0
-        if (i<=mu_cnf) then
-            site_clster = 0
-            call cluster_ham(site_clster,hamil_cls,hamiltonian,cl_st,mu)
+        if (i<mu_cnf) then
+            site_clster = 15
+            mu = 0.0
+            call cluster_ham(site_clster)
             info  = 10
             call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
                                            rwork, lrwork, iwork, liwork, info)
@@ -134,7 +104,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
         else  
             mu_avg = sum_mu/mu_cnf
             mu = mu_avg 
-            print *,i,my_id,mu,mu_avg
+            !print *,i,my_id,mu,mu_avg
         end if
         
         !!! loop over all the splits 
@@ -156,10 +126,10 @@ integer, dimension(MPI_STATUS_SIZE)::status
             changed_ids(ki) = site_clster
             !print *,'before sweep',my_id,site_clster
             !!  initialize cluster hamiltonian
-            call cluster_ham(site_clster,hamil_cls,hamiltonian,cl_st,mu)
+            call cluster_ham(site_clster)
             
             !!  try to update the mc variables at the given site
-            call  mc_sweep(hamil_cls,m,theta,phi,charge_confs,site_clster,hamiltonian,tvar,cl_st,mu)
+            call mc_sweep(site_clster)
           end do
           
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -216,7 +186,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
         !! initializing the most updated hamiltonian using the updated
         !! monte carlo configurations of m,theta and phi
-        call ham_init(charge_confs,right,left,up,down,right_up,left_down,hamiltonian,m,theta,phi)
+        call ham_init()
+
         end do
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         
@@ -242,7 +213,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
       !!! measurement cycle
       call cpu_time(t_strt_meas)
-      do i = 0,-1 , 1
+      do i = 0,n_meas-1, 1
         print *,'measurement loop with temp',tvar
         !! loop over all partition of the lattice
         
@@ -263,12 +234,12 @@ integer, dimension(MPI_STATUS_SIZE)::status
          do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
-            !!    initialize cluster hamiltonian
-            call cluster_ham(site_clster,hamil_cls,hamiltonian,cl_st,mu)
 
+            !!    initialize cluster hamiltonian
+            call cluster_ham(site_clster)
 
             !!     try to update the mc variables at the given site
-            call  mc_sweep(hamil_cls,m,theta,phi,charge_confs,site_clster,hamiltonian,tvar,cl_st,mu)
+            call  mc_sweep(site_clster)
 
             !! loop over the sites in each non-interacting split of the lattice
             end do
@@ -330,7 +301,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
           !! initializing the most updated hamiltonian using the updated
           !! monte carlo configurations of m,theta and phi
-          !call ham_init(charge_confs,right,left,up,down,right_up,left_down,hamiltonian,m,theta,phi)
+          call ham_init()
 
         !!! loop end for all the splits
         end do    
@@ -340,7 +311,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
         if (my_id==0) then 
         if (mod(i,meas_skip)==0) then
           
-          call print_f(fname,tvar)
+          call print_f(fname)
           print *,i,tvar,fname
 
           open(16,file=fname,action='write',position='append')
@@ -382,21 +353,17 @@ integer, dimension(MPI_STATUS_SIZE)::status
   call MPI_FINALIZE(ierr)
 
 end program ptca_repulsive
+!!-----------------------------------------------------------------------------!!
+!!-----------------------------------------------------------------------------!!
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!! setting up the neighbour table!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine neighbour_table(right,left,up,down,sites,right_up,left_down)
+subroutine neighbour_table()
 use varmodule
 implicit none
     integer(8) :: i,xi,yi,ri,li,ui,di
-    integer(8),dimension(0:n_sites-1):: right,left,up,down,right_up,left_down
-    integer(8),dimension(0:n_sites-1)::sites
-
-    !!! sites in the lattice starting from 0-->(n_sites-1)
-    do i = 0, n_sites-1, 1
-      sites(i) = i
-    end do
 
     do i = 0, n_sites-1, 1
       yi  =  i/L
@@ -411,7 +378,6 @@ implicit none
       down(i) = xi + (di * L)
       left_down(i) = li + (di*L)
       right_up(i) = ri + (ui*L)
-      !print *,i,right(i),left(i),up(i),down(i)
     end do
 
 end subroutine neighbour_table
@@ -420,14 +386,13 @@ end subroutine neighbour_table
 !! ---------------------------------------------------------------------------!!
 !! -------------------- initialize monte carlo variables----------------------!!
 !! ---------------------------------------------------------------------------!!
-subroutine mcvar_init(charge_confs,m,theta,phi)
+subroutine mcvar_init()
 use varmodule
 implicit none
   
   integer(8) :: i,j,si
   real(8):: rand1,rand2,rand3,rand_int3,rand_int1,rand_int2
-  real(8),dimension(0:ns_unit*n_sites-1) :: m,theta,phi,charge_confs
-
+ 
   !! initialize the initial configuration of the monte carlo variables
   !! loop over the sites in the lattice
   do i=0,n_sites-1,1
@@ -447,6 +412,7 @@ implicit none
 
     rand_int3=int(rand3*2000)
     phi(si)=(2.0_8*pi)*(rand_int3/2000.0)
+    
     charge_confs(si) = 1.5*u_int
     end do
   end do
@@ -456,22 +422,20 @@ end subroutine mcvar_init
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!initializing the hamiltonian!!!!1!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine ham_init(charge_confs,right,left,up,down,right_up,left_down,hamiltonian,m,theta,phi)
+subroutine ham_init()
 use varmodule
 implicit none
   
   integer :: i,id0,id1,id2,id0n,id1n,id2n
-  integer(8),dimension(0:n_sites-1) :: right,left,up,down,right_up,left_down
-
   real(8) ::mx0,mx1,mx2
   real(8) ::my0,my1,my2
   real(8) ::mz0,mz1,mz2
-  real(8),dimension(0:ns_unit*n_sites-1) :: m,theta,phi,charge_confs
-  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
+  
   hamiltonian(:,:) = cmplx(0.0,0.0)
 
   !! setting hopping dependent part of hamiltonian
-  call  haminitinUnitcell(hamiltonian,right,left,up,down)
+!  call  haminitinUnitcell(hamiltonian,right,left,up,down)
+  call  haminitinUnitcell()
 
   do i = 0,n_sites-1, 1
     !! sites in the unit cell
@@ -539,13 +503,11 @@ end subroutine ham_init
 !!! this function will set the hopping element. It will set the hopping between the sites
 !!! within the unit cell
 
-subroutine haminitinUnitcell(hamiltonian,right,left,up,down)
+subroutine haminitinUnitcell()
 use varmodule
 implicit none  
   integer :: id0 ,id1,id2 ,id0n , id1n , id2n,i
-  integer(8),dimension(0:n_sites-1)::right,left,up,down
-  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
-  
+
   do i = 0,n_sites-1, 1
     id0 = (ns_unit*i) !! first site in the unit cell i
     id1 = (ns_unit*i)+ 1 !! second site in the unit cell i
@@ -568,7 +530,9 @@ implicit none
     !print *,i,id0,id1,id2,id0n,id1n,id2n
   
   end do
-call haminitOutunitcell(right,left,up,down,hamiltonian)
+!call haminitOutunitcell(right,left,up,down,hamiltonian)
+call haminitOutunitcell()
+
 end subroutine haminitinUnitcell
 !!-----------------------------------------------------------------------------!!
 
@@ -576,15 +540,15 @@ end subroutine haminitinUnitcell
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! initializing the hamiltonian for the hopping for sites within the outsite
-subroutine haminitOutunitcell(right,left,up,down,hamiltonian)
+subroutine haminitOutunitcell()
+
 use varmodule
   implicit none
   integer :: si 
   integer :: si0, s0l, s0ld, si0n, s0ln, s0ldn ! sites related to 0 site in the unit cell 
   integer :: si1, s1r, s1d, si1n, s1rn, s1dn ! sites related to site 1 in the unit cell
   integer :: si2 , s2u, s2ur , si2n , s2un , s2urn ! sites related to site 2 in the unit cell
-  integer(8),dimension(0:n_sites-1) :: right,left,up,down
-  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
+
   
   do si=0,n_sites-1,1  
     !! 1st site in the unit cell and site it's connected to 2nd and 3rd site of other unit cell
@@ -634,22 +598,15 @@ end subroutine haminitOutunitcell
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!initializing the cluster hamiltonian!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine cluster_ham(site_clster,hamil_cls,hamiltonian,cl_st,mu)
+subroutine cluster_ham(site_clster)
 use varmodule
 implicit none
-  integer(8) :: i,si,x,y,xip,yip,xim,yim
-  integer :: sri,sui ! for the nn hopping
+  integer(8) :: i,si,x,y,xip,yip,xim,yim,sri,sui
   integer(8) :: site_clster ! site that has the variable that will be changed
   integer(8) :: sli,sdi,sild,siru
   integer(8) :: sic, sicn , clsi,clsin
   integer(8) :: sic1 , sicn1 , clsi1 , clsin1 
   integer(8) :: sic2 , sicn2 , clsi2 , clsin2 
-  real(8) :: mu
-  !! arrays with all sites and the sites in the cluster
-  integer(8),dimension(0:n_sites-1,0:cls_dim-1) :: cl_st
-
-  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian ! hamiltonian
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1)::hamil_cls ! cluster hamiltonian
 
   hamil_cls(:,:)=cmplx(0.0,0.0)
   !! constructing the cluster hamiltonian
@@ -722,21 +679,20 @@ implicit none
       !print *,si,cl_st(site_clster,si),site_clster
       
     end do
-    call hamclsinitinUnitcell(hamil_cls)
-    call hamclsinitOutunitcell(hamil_cls)
+    call hamclsinitinUnitcell()
+    call hamclsinitOutunitcell()
 
 end subroutine cluster_ham
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine hamclsinitinUnitcell(hamil_cls)
+subroutine hamclsinitinUnitcell()
 use varmodule
   implicit none
   
   integer :: i,x,y,si
   integer(8) :: nsi0,nsi1,nsi2
   integer(8) :: nsi0c,nsi1c,nsi2c
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1)::hamil_cls
   
   do i = 0, cls_dim-1, 1
       x = mod(i,cls_sites) ! x index in the  site cluster x --> [0,1,cls_sites-1]
@@ -780,16 +736,15 @@ end subroutine hamclsinitinUnitcell
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! this subroutine will initialize the hamiltonian for the bonds outside the unit cell
-subroutine hamclsinitOutunitcell(hamil_cls)
+subroutine hamclsinitOutunitcell()
 use varmodule
   implicit none
   integer :: si,i,x,y,sl,sr,su,sd ,sru,sld
   integer(8) :: si0 , s0l , s0ld , si0n , s0ln , s0ldn
   integer(8) :: si1, s1r , s1d , si1n , s1rn , s1dn
   integer(8) :: si2 , s2u ,s2ur , si2n , s2un , s2urn
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls
   
-   do i = 0, cls_dim-1, 1
+  do i = 0, cls_dim-1, 1
       x = mod(i,cls_sites) ! x index in the  site cluster x --> [0,1,cls_sites-1]
       y = i/cls_sites       ! y index in the  site cluster y --> [0,1,cls_sites-1]
       si = x+(cls_sites*y)  ! site produced in the  site cluster si-->[0,cls_dim-1]
@@ -846,13 +801,12 @@ end subroutine hamclsinitOutunitcell
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!! generate cluster sites!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine cluster_sites(cl_st)
+subroutine cluster_sites()
 use varmodule
 implicit none
     integer(8) :: i,j,sil
     integer(8) :: xi,yi,xn,yn
     integer(8) :: x_init,y_init
-    integer(8),dimension(0:n_sites-1,0:cls_dim-1) :: cl_st
 
     !! generating all the sites in the cluster
     do j=0,n_sites-1,1
@@ -900,7 +854,7 @@ end subroutine cluster_sites
 !!-----------------------------------------------------------------------------!!
 !!---------------------------splitting lattice to------------------------------!!
 !!-----------------------------------------------------------------------------!!
-subroutine lattice_splt(sites_array)
+subroutine lattice_splt()
 use varmodule
 implicit none
   !! given the x coordinate(i) and y coordinate(j) 
@@ -912,7 +866,6 @@ implicit none
   integer(8) :: splt_var ! --> 0 , # of partitions of lattice
   integer(8) :: ki !! used in the array as an index
   integer (8) :: l_minus_1 
-  integer(8),dimension(0:n_splits-1,0:split_sites-1) :: sites_array !! array to store the sites and splits
 
   l_minus_1 = L - 1
 
@@ -946,37 +899,29 @@ end subroutine lattice_splt
 !! ---------------------------------------------------------------------------!!
 !! -------------------- monte carlo sweep--------------------------------------!!
 !! ---------------------------------------------------------------------------!!
-subroutine mc_sweep(hamil_cls,m,theta,phi,charge_confs,site_clster,hamiltonian,tvar,cl_st,mu)
+subroutine mc_sweep(site_clster)
 use varmodule
 implicit none
   integer(8) :: si,loc_site,site_clster!! local site that is being flipped
-  real(8) ::  mu_loc,sum_mu,mu
+  real(8) ::  mu_loc,sum_mu
   real(8) :: beta,e_u,e_v,enr_loc
-  real(8)  :: tvar,mc_prob
+  real(8)  :: mc_prob
   
-  integer(8), dimension(0:n_sites-1,0:cls_dim-1)::cl_st ! sites in the cluster at site j
- 
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls,temp_ham ! cluster hamiltonian
-  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original full hamiltonian
-  real(8),dimension(0:ns_unit-1,0:n_sites-1) :: m,theta,phi,charge_confs  !! m , theta , phi array
-  real(8),dimension(0:dim_clsh-1) :: egval !! eigenvalue array
   
-  beta = 1./tvar
-
   ! position of global site in the cluster (center)
   loc_site = int((0.5*cls_sites)+cls_sites*(0.5*cls_sites))
 
   !!! updating first site in the unit cell
   si = 0 
-  call mcsweepUnitCell(loc_site,hamil_cls,m,theta,phi,charge_confs,site_clster,hamiltonian,tvar,cl_st,si,mu)
+  call mcsweepUnitCell(loc_site,site_clster,si)
   
   !!! trying to update the second site in the unit cell
   si = 1 
-  call mcsweepUnitCell(loc_site,hamil_cls,m,theta,phi,charge_confs,site_clster,hamiltonian,tvar,cl_st,si,mu)
-  
+  call mcsweepUnitCell(loc_site,site_clster,si)
+
   !!! trying to update the third site in the unit cell
   si = 2
-  call mcsweepUnitCell(loc_site,hamil_cls,m,theta,phi,charge_confs,site_clster,hamiltonian,tvar,cl_st,si,mu)
+  call mcsweepUnitCell(loc_site,site_clster,si)
 end subroutine mc_sweep
 !! ---------------------------------------------------------------------------!!
 
@@ -984,12 +929,12 @@ end subroutine mc_sweep
 !! --------------  monte carlo sweep for the unit cell------------------------!!
 !! ---------------------------------------------------------------------------!!
 
-subroutine mcsweepUnitCell(loc_site,hamil_cls,m,theta,phi,charge_confs,site_clster,hamiltonian,tvar,cl_st,si,mu)
+subroutine mcsweepUnitCell(loc_site,site_clster,si)
 use varmodule
 implicit none
   integer(8) :: si,loc_site,sil,silc,silt,siltn,site_clster !! index of site in the cluster
-  real(8) :: tvar,beta,e_u,e_v,enr_loc,mc_prob,mu
-  integer(8), dimension(0:n_sites-1,0:cls_dim-1)::cl_st ! sites in the cluster at site j
+  real(8) :: beta,e_u,e_v,enr_loc,mc_prob
+
  
   !!! variables for the monte carlo procedure
   real(8) :: mx,my,mz ! to store initial value of mx,my,mz 
@@ -997,21 +942,10 @@ implicit none
   real(8) :: rand_int1,rand_int2, rand_int3
   real(8) :: delE,tempm,temptheta,tempphi !! store temp value of m,theta,phi for site 0
  
-  complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls 
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: temp_clsham,temp2_clsham !! to store a copy of the cluster hamiltonian 
-  complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian  !! original hamiltonian
-  real(8),dimension(0:ns_unit*n_sites-1) :: m,theta,phi,charge_confs  !! m , theta , phi array
   real(8),dimension(0:ns_unit*n_sites-1) :: loc_m  !! local m array
-  real(8),dimension(0:dim_clsh-1) :: egval !! eigenvalue array
-  
-  integer(8),parameter :: lwork  = (2*dim_clsh)+(dim_clsh**2)
-  integer(8),parameter :: lrwork = 2*(dim_clsh**2)+(5*(dim_clsh)+1)
-  integer(8),parameter :: liwork = (5*dim_clsh)+3
-  integer(8) :: info
-  complex(8),dimension(lwork)::work
-  real(8),dimension(lrwork) :: rwork
-  integer(8),dimension(liwork) :: iwork
 
+  
   call random_number(rand1)
   call random_number(rand2)
   call random_number(rand3)
@@ -1040,7 +974,7 @@ implicit none
                                            rwork, lrwork, iwork, liwork, info)
   
   !!! call subroutine to calculate the energy
-  call enr_calc(egval,loc_m,cl_st,enr_loc,site_clster,tvar)
+  call enr_calc(loc_m,enr_loc,site_clster,tvar)
   e_u = enr_loc
    
   !! copying the cluster hamiltonian 
@@ -1068,7 +1002,7 @@ implicit none
   !print *,site_clster,(site_clster*ns_unit)+si,egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0),mu
   !print *,ns_unit,si,si+(ns_unit*site_clster),site_clster
   !!! call subroutine to calculate the energy
-  call enr_calc(egval,loc_m,cl_st,enr_loc,site_clster,tvar)
+  call enr_calc(loc_m,enr_loc,site_clster)
   e_v = enr_loc
   
   
@@ -1079,7 +1013,7 @@ implicit none
   
   !! calculate the energy difference
   delE = e_v - e_u
- 
+  beta = 1./tvar
   if (delE < 0.0) then
     m(si+site_clster*ns_unit) = tempm  !! update m 
     theta(si+site_clster*ns_unit) = temptheta !! update theta
@@ -1134,16 +1068,14 @@ end subroutine mcsweepUnitCell
 !! ---------------------------------------------------------------------------!!
 !! ------------------------measurement of energy------------------------------!!
 !! ---------------------------------------------------------------------------!!
-subroutine enr_calc(egval,loc_m,cl_st,enr_loc,site_clster,tvar)
+subroutine enr_calc(loc_m,enr_loc,site_clster)
 use varmodule
 implicit none
   integer(8) :: i,si,site_clster
-  integer(8),dimension(0:n_sites-1,0:cls_dim-1)::cl_st
-  real(8),dimension(0:dim_clsh-1):: egval
   real(8),dimension(0:ns_unit*n_sites-1)::loc_m
   real(8)::m_i
   real(8):: fac_be ! product of beta and e_i
-  real(8) :: sum_e,sum_cl,tvar,beta,enr_loc,val
+  real(8) :: sum_e,sum_cl,beta,enr_loc,val
 
   
   beta = 1./tvar
@@ -1173,16 +1105,13 @@ end subroutine enr_calc
 
 !! ---------------------------------------------------------------------------!!
 
-
-
 !!-----------------------------------------------------------------------------!!
 !!-------------------- printing -----------------------------------------------!!
 !!-----------------------------------------------------------------------------!!
-subroutine print_f(fname,tvar)
+subroutine print_f(fname)
 use varmodule
 implicit none
 
-   real(8):: tvar
    character(len=50) :: format_L
    character(len=50) :: format_U
    character(len=50) :: format_temp="(F8.6)"
@@ -1221,11 +1150,4 @@ implicit none
 !   print*,fname
 
  end subroutine print_f
-
-!subroutine modules_Test
-!  use varmodule 
- ! implicit none 
-!  print * , L, n_sites
-!  print *,cls_dim
-!  print *,cls_dim+n_sites
-!end subroutine modules_Test
+!!-----------------------------------------------------------------------------!!
