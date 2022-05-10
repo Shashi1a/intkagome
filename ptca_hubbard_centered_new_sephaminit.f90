@@ -213,7 +213,8 @@ use varmodule
         !! initializing the most updated hamiltonian using the updated
         !! monte carlo configurations of m,theta and phi
         hamiltonian(:,:) = ham_noint(:,:)
-        call hamintpart()
+        call ham_init()
+
         
       end do
       call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -328,7 +329,7 @@ use varmodule
           !! initializing the most updated hamiltonian using the updated
           !! monte carlo configurations of m,theta and phi 
           hamiltonian(:,:) = ham_noint(:,:)
-          call hamintpart()
+          call ham_init()
 
         !!! loop end for all the splits
         end do    
@@ -521,73 +522,6 @@ implicit none
   end do
   
 end subroutine ham_init
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!---------- initialize the  interacting part of the hamiltonian-------------!
-subroutine hamintpart()
-use varmodule
-implicit none 
-
-
-  integer :: i,id0,id1,id2,id0n,id1n,id2n
-  real(8) ::mx0,mx1,mx2
-  real(8) ::my0,my1,my2
-  real(8) ::mz0,mz1,mz2
-  
-  do i = 0,n_sites-1, 1
-    !! sites in the unit cell
-    id0 = (ns_unit*i) 
-    id0n = id0 + (ns_unit*n_sites)
-    id1 = id0+1 
-    id1n = id1 + (ns_unit*n_sites)
-    id2 = id0+2
-    id2n = id2 + (ns_unit*n_sites)
-
-
-    !!! mx for three sites in the unit cell
-    mx0 = m(0+i*ns_unit)  * cos(phi(0+i*ns_unit)) * sin(theta(0+i*ns_unit))
-    mx1 = m(1+i*ns_unit)  * cos(phi(1+i*ns_unit)) * sin(theta(1+i*ns_unit))
-    mx2 = m(2+i*ns_unit)  * cos(phi(2+i*ns_unit)) * sin(theta(2+i*ns_unit))
-
-    !!! my for three sites in the unit cell
-    my0 = m(0+i*ns_unit) * sin(phi(0+i*ns_unit)) * sin(theta(0+i*ns_unit))
-    my1 = m(1+i*ns_unit) * sin(phi(1+i*ns_unit)) * sin(theta(1+i*ns_unit))
-    my2 = m(2+i*ns_unit) * sin(phi(2+i*ns_unit)) * sin(theta(2+i*ns_unit))
-    
-    !! mz for three sites in the unit cell
-    mz0 = m(0+i*ns_unit) *  cos(theta(0+i*ns_unit))
-    mz1 = m(1+i*ns_unit) *  cos(theta(1+i*ns_unit))
-    mz2 = m(2+i*ns_unit) *  cos(theta(2+i*ns_unit))
-    
-    !! diagonal element for site 0 for up and dn spins
-    hamiltonian(id0,id0) =  -(-charge_confs(0+i*ns_unit)) - (0.5*u_int)*mz0
-    hamiltonian(id0n,id0n) = -(-charge_confs(0+i*ns_unit)) + (0.5*u_int)*mz0
-
-    !! diagonal element for site 1 for up and dn spins
-    hamiltonian(id1,id1) =  -(-charge_confs(1+i*ns_unit)) - (0.5*u_int)*mz1
-    hamiltonian(id1n,id1n) = -(-charge_confs(1+i*ns_unit)) + (0.5*u_int)*mz1
-
-    !! diagonal element for site20 for up and dn spins
-    hamiltonian(id2,id2) =  -(-charge_confs(2+i*ns_unit)) - (0.5*u_int)*mz2
-    hamiltonian(id2n,id2n) = -(-charge_confs(2+i*ns_unit)) + (0.5*u_int)*mz2
-
-    ! setting the updn and dnup components for site 0 in the unit cell
-    hamiltonian(id0,id0n) = -(0.5*u_int)*cmplx(mx0,-my0)
-    hamiltonian(id0n,id0) = -(0.5*u_int)*cmplx(mx0,my0)
-
-
-    ! setting the updn and dnup components for site 1 in the unit cell
-    hamiltonian(id1,id1n) = -(0.5*u_int)*cmplx(mx1,-my1)
-    hamiltonian(id1n,id1) = -(0.5*u_int)*cmplx(mx1,my1)
-
-    ! setting the updn and dnup components for site 2 in the unit cell
-    hamiltonian(id2,id2n) = -(0.5*u_int)*cmplx(mx2,-my2)
-    hamiltonian(id2n,id2) = -(0.5*u_int)*cmplx(mx2,my2)
-  end do
-end subroutine hamintpart
-
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

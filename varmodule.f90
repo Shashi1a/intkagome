@@ -26,7 +26,7 @@ module  varmodule
     real(8),parameter :: dtemp = 0.01 !! temperature step to lower the temperature
     real(8),parameter :: t_min = 0.28 !! minimum temperature for the simulation
     real(8)  :: tvar !! variable used for varying tempreature
-    real(8) :: u_int = 6.0 !! interaction strength
+    real(8) :: u_int = 1.0 !! interaction strength
 
     !!! this array will be initialized to -1 at the starting 
     !!! entry will be changed to 1 when that particular site is updated during mc
