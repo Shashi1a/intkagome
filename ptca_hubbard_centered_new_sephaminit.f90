@@ -10,9 +10,9 @@ use varmodule
   integer(8) :: i,j,ki
   integer :: my_id,num_procs !! process id and number of processes
   integer(8) :: site_clster,loc_proc !! local site in the cluster
-  real(8) :: rnum                  !! variable used to store intermediate temperature
+  real(8) :: rnum                 !! variable used to store intermediate temperature
   real(8) :: mu_init,sum_mu=0.0,mu_avg=0.0 !! mu calculations
-  
+  real(8) :: uninitial !! variable to store initial value of the interaction strength
   !!!! for time calcualtions
   real :: t_strt_equil, t_end_equil
   real :: t_strt_meas , t_end_meas
@@ -58,6 +58,28 @@ use varmodule
     !! since we have broadcasted monte carlo variables to all processes all of them will 
     !! have the same hamiltonian.
     mu = 0.0
+    uninitial = u_int
+    u_int = 0.0 
+    
+    !! set the hamiltonian with mu and interaction set to zero
+    call ham_init()
+    ham_noint = cmplx(0.0,0.0)
+
+    !! copy the non interacting part of the hamiltonian
+    ham_noint(:,:) = hamiltonian(:,:)
+
+    !! get the cluster hamiltonian for the non interacting system
+    site_clster = 15
+    hamcls_noint(:,:) = cmplx(0.0,0.0)
+    call cluster_ham(site_clster)
+
+    !! copy the non interacting cluster hamiltonian
+    hamcls_noint(:,:) = hamil_cls(:,:)
+
+    !! set the original value of the interaction strength
+    u_int = uninitial
+
+    !! generate the full hamiltonian
     call ham_init()
     
     !! wait for all the process to finish this
@@ -74,7 +96,7 @@ use varmodule
   
     !! initialize the temperature and we will loop over this
     tvar  = temp
-    
+   
     !!! temperature loop over all the temperatures
     do while (tvar > t_min)
       print *,tvar,"started"
@@ -502,6 +524,21 @@ implicit none
   
 end subroutine ham_init
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!---------- initialize the non interacting part of the hamiltonian-------------!
+
+subroutine nonintham()
+use varmodule
+implicit none 
+
+
+
+
+end subroutine nonintham
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! this function will set the hopping element. It will set the hopping between the sites
