@@ -57,7 +57,6 @@ use varmodule
     !! subroutine to initialize the full lattice hamiltonian (2L*L,2*L*L) by all processes
     !! since we have broadcasted monte carlo variables to all processes all of them will 
     !! have the same hamiltonian.
-    mu = 0.0
     
     !! set the hamiltonian and the copy to be zero
     hamiltonian(:,:) = cmplx(0.0,0.0)
@@ -77,11 +76,25 @@ use varmodule
     hamcls_noint(:,:) = cmplx(0.0,0.0)
 
     !! get the cluster hamiltonian for the non interacting system
-    call hamclsinitinUnitcell()
+    !call hamclsinitinUnitcell()
+    !call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
+    !                                       rwork, lrwork, iwork, liwork, info)
+               
+    !print *,egval(0),egval(dim_clsh-1)
+ 
+    call zheevd('V','U', dim_h, hamiltonian, dim_h, egval_fl, work_full, lwork_full, &
+                                           rwork_full, lrwork_full, iwork_full, liwork_full, info)
 
+    print *,egval_fl(0),egval_fl(dim_h-1)
+
+    open(89,file='eigenval.dat',action='write',position='append')            
+    do i=0,dim_h-1,1
+      write(89,*) egval_fl(i)
+    end do
+    close(89)                
     !! copy the non interacting cluster hamiltonian
     hamcls_noint(:,:) = hamil_cls(:,:)
-    
+
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
@@ -104,17 +117,20 @@ use varmodule
 
       !! time when the equilibration started
       call cpu_time(t_strt_equil)
-      open(81,file='mucalc_L8_cl_6.dat',action='write',position='append')
+      !open(81,file='mucalc_L8_cl_6.dat',action='write',position='append')
+      
       !!! Equlibration cycle
-      do i = 0, n_equil, 1
+      do i = 0, 0, 1
       
         !!! for first 20 steps calculate the mu and use if for rest of the iterations
         !!! form a cluster centered around site 0
         if (i<mu_cnf) then
-            
-            site_clster = 15
-            mu = 0.0
-            call cluster_ham(site_clster)
+            !! form a cluster centered around site 0
+            site_clster = 0
+            mu = 0.0 !! set mu to zero for this calculation
+            hamil_cls(:,:) = cmplx(0.0,0.0) !! set all matrix element to zero
+            hamil_cls(:,:) = hamcls_noint(:,:) !! set the non interacting part of the hamiltonian
+            call cluster_ham(site_clster)  !! set the diagonal elements
             info  = 10
             call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
                                            rwork, lrwork, iwork, liwork, info)
@@ -122,12 +138,14 @@ use varmodule
             mu_init = 0.5 *(egval(int(0.5*dim_clsh)-1)+egval(int(0.5*dim_clsh)))
             mu = mu_init
             sum_mu  = sum_mu + mu_init
-            print *,my_id,i,mu,int(0.5*dim_clsh)
-            write(81,*) tvar,i,mu_init
+            print *,my_id,i,mu,int(0.5*dim_clsh),egval(int(0.5*dim_clsh)),egval(int(0.5*dim_clsh)-1)
+            !print *,my_id,i,mu,egval(dim_clsh-1),egval(0)
+
+            !write(81,*) tvar,i,mu_init
         else  
             mu_avg = sum_mu/mu_cnf
             mu = mu_avg
-            write(81,*) tvar,i,mu 
+            !write(81,*) tvar,i,mu 
             print *,i,my_id,mu,mu_avg,int(0.5*dim_clsh)
         end if
         
@@ -144,14 +162,19 @@ use varmodule
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           call MPI_BCAST(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-          
+
+           
           !! loop over all the sites within each partition
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
             
-            !print *,'before sweep',my_id,site_clster
-            !!  initialize cluster hamiltonian
+            !  print *,'before sweep',my_id,site_clster
+            !! initialize cluster hamiltonian 
+            !! set all elements to zero
+            !! copy the non interacting hamiltonian
+            hamil_cls(:,:) = cmplx(0.0,0.0)
+            hamil_cls(:,:) = hamcls_noint(:,:)
             call cluster_ham(site_clster)
             
             !!  try to update the mc variables at the given site
@@ -172,15 +195,15 @@ use varmodule
               !! loop over the loc_ids array and get the site index that is updated
               do ki=0,split_sites-1,1
                 if (loc_ids(ki)>=0) then
-                  m(0+loc_ids(ki)*ns_unit) = m_loc(0+loc_ids(ki)*ns_unit)
-                  m(1+loc_ids(ki)*ns_unit) = m_loc(1+loc_ids(ki)*ns_unit)
-                  m(2+loc_ids(ki)*ns_unit) = m_loc(2+loc_ids(ki)*ns_unit)
-                  theta(0+loc_ids(ki)*ns_unit) = loc_theta(0+loc_ids(ki)*ns_unit)
-                  theta(1+loc_ids(ki)*ns_unit) = loc_theta(1+loc_ids(ki)*ns_unit)
-                  theta(2+loc_ids(ki)*ns_unit) = loc_theta(2+loc_ids(ki)*ns_unit)
-                  phi(0+loc_ids(ki)*ns_unit) = loc_phi(0+loc_ids(ki)*ns_unit)
-                  phi(1+loc_ids(ki)*ns_unit) = loc_phi(1+loc_ids(ki)*ns_unit)
-                  phi(2+loc_ids(ki)*ns_unit) = loc_phi(2+loc_ids(ki)*ns_unit)
+                  m(0+(loc_ids(ki)*ns_unit)) = m_loc(0+(loc_ids(ki)*ns_unit))
+                  m(1+(loc_ids(ki)*ns_unit)) = m_loc(1+(loc_ids(ki)*ns_unit))
+                  m(2+(loc_ids(ki)*ns_unit)) = m_loc(2+(loc_ids(ki)*ns_unit))
+                  theta(0+(loc_ids(ki)*ns_unit)) = loc_theta(0+(loc_ids(ki)*ns_unit))
+                  theta(1+(loc_ids(ki)*ns_unit)) = loc_theta(1+(loc_ids(ki)*ns_unit))
+                  theta(2+(loc_ids(ki)*ns_unit)) = loc_theta(2+(loc_ids(ki)*ns_unit))
+                  phi(0+(loc_ids(ki)*ns_unit)) = loc_phi(0+(loc_ids(ki)*ns_unit))
+                  phi(1+(loc_ids(ki)*ns_unit)) = loc_phi(1+(loc_ids(ki)*ns_unit))
+                  phi(2+(loc_ids(ki)*ns_unit)) = loc_phi(2+(loc_ids(ki)*ns_unit))
                 endif
               enddo
             end do
@@ -212,16 +235,16 @@ use varmodule
 
         !! initializing the most updated hamiltonian using the updated
         !! monte carlo configurations of m,theta and phi
+        hamiltonian(:,:) = cmplx(0.0,0.0)
         hamiltonian(:,:) = ham_noint(:,:)
         call ham_init()
 
-        
       end do
       call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         
       
       end do
-      close(81)
+      !close(81)
       call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
       !! time when the equilibration cycle finishes
@@ -264,8 +287,10 @@ use varmodule
             changed_ids(ki) = site_clster
 
             !!    initialize cluster hamiltonian
+            hamil_cls(:,:) = cmplx(0.0,0.0)
+            hamil_cls(:,:) = hamcls_noint(:,:)
             call cluster_ham(site_clster)
-
+             
             !!     try to update the mc variables at the given site
             call  mc_sweep(site_clster)
 
@@ -286,15 +311,15 @@ use varmodule
               !!! set the variables arrays in master using values from other slave processes
               do ki=0,split_sites-1,1
               if (loc_ids(ki)>=0) then
-                m(0+loc_ids(ki)*ns_unit) = m_loc(0+loc_ids(ki)*ns_unit)
-                m(1+loc_ids(ki)*ns_unit) = m_loc(1+loc_ids(ki)*ns_unit)
-                m(2+loc_ids(ki)*ns_unit) = m_loc(2+loc_ids(ki)*ns_unit)
-                theta(0+loc_ids(ki)*ns_unit) = loc_theta(0+loc_ids(ki)*ns_unit)
-                theta(1+loc_ids(ki)*ns_unit) = loc_theta(1+loc_ids(ki)*ns_unit)
-                theta(2+loc_ids(ki)*ns_unit) = loc_theta(2+loc_ids(ki)*ns_unit)
-                phi(0+loc_ids(ki)*ns_unit) = loc_phi(0+loc_ids(ki)*ns_unit)
-                phi(1+loc_ids(ki)*ns_unit) = loc_phi(1+loc_ids(ki)*ns_unit)
-                phi(2+loc_ids(ki)*ns_unit) = loc_phi(2+loc_ids(ki)*ns_unit)              
+                m(0+(loc_ids(ki)*ns_unit)) = m_loc(0+(loc_ids(ki)*ns_unit))
+                m(1+(loc_ids(ki)*ns_unit)) = m_loc(1+(loc_ids(ki)*ns_unit))
+                m(2+(loc_ids(ki)*ns_unit)) = m_loc(2+(loc_ids(ki)*ns_unit))
+                theta(0+(loc_ids(ki)*ns_unit)) = loc_theta(0+(loc_ids(ki)*ns_unit))
+                theta(1+(loc_ids(ki)*ns_unit)) = loc_theta(1+(loc_ids(ki)*ns_unit))
+                theta(2+(loc_ids(ki)*ns_unit)) = loc_theta(2+(loc_ids(ki)*ns_unit))
+                phi(0+(loc_ids(ki)*ns_unit)) = loc_phi(0+(loc_ids(ki)*ns_unit))
+                phi(1+(loc_ids(ki)*ns_unit)) = loc_phi(1+(loc_ids(ki)*ns_unit))
+                phi(2+(loc_ids(ki)*ns_unit)) = loc_phi(2+(loc_ids(ki)*ns_unit))              
                endif
               enddo
             end do
@@ -328,6 +353,7 @@ use varmodule
 
           !! initializing the most updated hamiltonian using the updated
           !! monte carlo configurations of m,theta and phi 
+          hamiltonian(:,:) = cmplx(0.0,0.0)
           hamiltonian(:,:) = ham_noint(:,:)
           call ham_init()
 
@@ -473,31 +499,31 @@ implicit none
 
 
     !!! mx for three sites in the unit cell
-    mx0 = m(0+i*ns_unit)  * cos(phi(0+i*ns_unit)) * sin(theta(0+i*ns_unit))
-    mx1 = m(1+i*ns_unit)  * cos(phi(1+i*ns_unit)) * sin(theta(1+i*ns_unit))
-    mx2 = m(2+i*ns_unit)  * cos(phi(2+i*ns_unit)) * sin(theta(2+i*ns_unit))
+    mx0 = m(id0)  * cos(phi(id0)) * sin(theta(id0))
+    mx1 = m(id1)  * cos(phi(id1)) * sin(theta(id1))
+    mx2 = m(id2)  * cos(phi(id2)) * sin(theta(id2))
 
     !!! my for three sites in the unit cell
-    my0 = m(0+i*ns_unit) * sin(phi(0+i*ns_unit)) * sin(theta(0+i*ns_unit))
-    my1 = m(1+i*ns_unit) * sin(phi(1+i*ns_unit)) * sin(theta(1+i*ns_unit))
-    my2 = m(2+i*ns_unit) * sin(phi(2+i*ns_unit)) * sin(theta(2+i*ns_unit))
-    
+    my0 = m(id0)  * sin(phi(id0)) * sin(theta(id0))
+    my1 = m(id1)  * sin(phi(id1)) * sin(theta(id1))
+    my2 = m(id2)  * sin(phi(id2)) * sin(theta(id2))
+
     !! mz for three sites in the unit cell
-    mz0 = m(0+i*ns_unit) *  cos(theta(0+i*ns_unit))
-    mz1 = m(1+i*ns_unit) *  cos(theta(1+i*ns_unit))
-    mz2 = m(2+i*ns_unit) *  cos(theta(2+i*ns_unit))
+    mz0 = m(id0)  * cos(theta(id0))
+    mz1 = m(id1)  * cos(theta(id1))
+    mz2 = m(id2)  * cos(theta(id2))
     
     !! diagonal element for site 0 for up and dn spins
-    hamiltonian(id0,id0) =  -(-charge_confs(0+i*ns_unit)) - (0.5*u_int)*mz0
-    hamiltonian(id0n,id0n) = -(-charge_confs(0+i*ns_unit)) + (0.5*u_int)*mz0
+    hamiltonian(id0,id0) =  -(-charge_confs(id0)) - (0.5*u_int)*mz0
+    hamiltonian(id0n,id0n) = -(-charge_confs(id0)) + (0.5*u_int)*mz0
 
     !! diagonal element for site 1 for up and dn spins
-    hamiltonian(id1,id1) =  -(-charge_confs(1+i*ns_unit)) - (0.5*u_int)*mz1
-    hamiltonian(id1n,id1n) = -(-charge_confs(1+i*ns_unit)) + (0.5*u_int)*mz1
+    hamiltonian(id1,id1) =  -(-charge_confs(id1)) - (0.5*u_int)*mz1
+    hamiltonian(id1n,id1n) = -(-charge_confs(id1)) + (0.5*u_int)*mz1
 
     !! diagonal element for site20 for up and dn spins
-    hamiltonian(id2,id2) =  -(-charge_confs(2+i*ns_unit)) - (0.5*u_int)*mz2
-    hamiltonian(id2n,id2n) = -(-charge_confs(2+i*ns_unit)) + (0.5*u_int)*mz2
+    hamiltonian(id2,id2) =  -(-charge_confs(id2)) - (0.5*u_int)*mz2
+    hamiltonian(id2n,id2n) = -(-charge_confs(id2)) + (0.5*u_int)*mz2
 
     ! setting the updn and dnup components for site 0 in the unit cell
     hamiltonian(id0,id0n) = -(0.5*u_int)*cmplx(mx0,-my0)
@@ -633,7 +659,6 @@ implicit none
   integer(8) :: sic1 , sicn1 , clsi1 , clsin1 
   integer(8) :: sic2 , sicn2 , clsi2 , clsin2 
 
-  hamil_cls(:,:)=cmplx(0.0,0.0)
   !! constructing the cluster hamiltonian
   do i = 0,cls_dim-1, 1
       x = mod(i,cls_sites) ! x index in the  site cluster x --> [0,1,cls_sites-1]
@@ -704,9 +729,7 @@ implicit none
       !print *,si,cl_st(site_clster,si),site_clster
       
     end do
-    !call hamclsinitinUnitcell()
-    !call hamclsinitOutunitcell()
-
+    
 end subroutine cluster_ham
 
 
