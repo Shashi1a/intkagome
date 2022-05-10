@@ -47,8 +47,10 @@ module  varmodule
     real(8),dimension(0:(ns_unit*n_sites)-1):: charge_confs !! to store charge configurations
     
     !!!!!!!!!!!!!!! full hamiltonian and cluster hamiltonian !!!!!!!!!!!!
-    complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian
-    complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls
+    complex(8),dimension(0:dim_h-1,0:dim_h-1) :: hamiltonian !! full hamiltonian
+    complex(8),dimension(0:dim_h-1,0:dim_h-1) :: ham_noint  !! non interacting hamiltonian
+    complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamil_cls !! cluster hamiltonian
+    complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: hamcls_noint !! non interacting cluster hamiltonian
     
     !!!!!!!!!!!!!!! for lapack subroutines !!!!!!!!!!!!!!!
     integer(8),parameter :: lwork  = (2*dim_clsh)+(dim_clsh**2)
