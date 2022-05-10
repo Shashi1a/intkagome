@@ -58,29 +58,29 @@ use varmodule
     !! since we have broadcasted monte carlo variables to all processes all of them will 
     !! have the same hamiltonian.
     mu = 0.0
-    uninitial = u_int
-    u_int = 0.0 
     
-    !! set the hamiltonian with mu and interaction set to zero
-    call ham_init()
+    !! set the hamiltonian and the copy to be zero
+    hamiltonian(:,:) = cmplx(0.0,0.0)
     ham_noint = cmplx(0.0,0.0)
 
+    !! set the non interacting part of the hamiltonian
+    call  haminitinUnitcell()
+    
     !! copy the non interacting part of the hamiltonian
     ham_noint(:,:) = hamiltonian(:,:)
 
-    !! get the cluster hamiltonian for the non interacting system
-    site_clster = 15
+    !!! set the interacting part of the hamiltonian
+    call ham_init()
+
+    !! initialize all the matrix elements to zero 
+    hamil_cls(:,:) = cmplx(0.0,0.0) 
     hamcls_noint(:,:) = cmplx(0.0,0.0)
-    call cluster_ham(site_clster)
+
+    !! get the cluster hamiltonian for the non interacting system
+    call hamclsinitinUnitcell()
 
     !! copy the non interacting cluster hamiltonian
     hamcls_noint(:,:) = hamil_cls(:,:)
-
-    !! set the original value of the interaction strength
-    u_int = uninitial
-
-    !! generate the full hamiltonian
-    call ham_init()
     
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -122,13 +122,13 @@ use varmodule
             mu_init = 0.5 *(egval(int(0.5*dim_clsh)-1)+egval(int(0.5*dim_clsh)))
             mu = mu_init
             sum_mu  = sum_mu + mu_init
-            !print *,my_id,i,mu,int(0.5*dim_clsh)
+            print *,my_id,i,mu,int(0.5*dim_clsh)
             write(81,*) tvar,i,mu_init
         else  
             mu_avg = sum_mu/mu_cnf
             mu = mu_avg
             write(81,*) tvar,i,mu 
-            !print *,i,my_id,mu,mu_avg,int(0.5*dim_clsh)
+            print *,i,my_id,mu,mu_avg,int(0.5*dim_clsh)
         end if
         
         !!! loop over all the splits 
@@ -145,8 +145,7 @@ use varmodule
           call MPI_BCAST(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           
-          !! loop over all the sites within the partition
-          print *,i,j
+          !! loop over all the sites within each partition
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
@@ -213,10 +212,11 @@ use varmodule
 
         !! initializing the most updated hamiltonian using the updated
         !! monte carlo configurations of m,theta and phi
-        call ham_init()
-
-        end do
-        call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+        hamiltonian(:,:) = ham_noint(:,:)
+        call hamintpart()
+        
+      end do
+      call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         
       
       end do
@@ -326,8 +326,9 @@ use varmodule
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
           !! initializing the most updated hamiltonian using the updated
-          !! monte carlo configurations of m,theta and phi
-          call ham_init()
+          !! monte carlo configurations of m,theta and phi 
+          hamiltonian(:,:) = ham_noint(:,:)
+          call hamintpart()
 
         !!! loop end for all the splits
         end do    
@@ -457,11 +458,8 @@ implicit none
   real(8) ::my0,my1,my2
   real(8) ::mz0,mz1,mz2
   
-  hamiltonian(:,:) = cmplx(0.0,0.0)
-
   !! setting hopping dependent part of hamiltonian
-!  call  haminitinUnitcell(hamiltonian,right,left,up,down)
-  call  haminitinUnitcell()
+  !call  haminitinUnitcell()
 
   do i = 0,n_sites-1, 1
     !! sites in the unit cell
@@ -526,16 +524,68 @@ end subroutine ham_init
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!---------- initialize the non interacting part of the hamiltonian-------------!
-
-subroutine nonintham()
+!---------- initialize the  interacting part of the hamiltonian-------------!
+subroutine hamintpart()
 use varmodule
 implicit none 
 
 
+  integer :: i,id0,id1,id2,id0n,id1n,id2n
+  real(8) ::mx0,mx1,mx2
+  real(8) ::my0,my1,my2
+  real(8) ::mz0,mz1,mz2
+  
+  do i = 0,n_sites-1, 1
+    !! sites in the unit cell
+    id0 = (ns_unit*i) 
+    id0n = id0 + (ns_unit*n_sites)
+    id1 = id0+1 
+    id1n = id1 + (ns_unit*n_sites)
+    id2 = id0+2
+    id2n = id2 + (ns_unit*n_sites)
 
 
-end subroutine nonintham
+    !!! mx for three sites in the unit cell
+    mx0 = m(0+i*ns_unit)  * cos(phi(0+i*ns_unit)) * sin(theta(0+i*ns_unit))
+    mx1 = m(1+i*ns_unit)  * cos(phi(1+i*ns_unit)) * sin(theta(1+i*ns_unit))
+    mx2 = m(2+i*ns_unit)  * cos(phi(2+i*ns_unit)) * sin(theta(2+i*ns_unit))
+
+    !!! my for three sites in the unit cell
+    my0 = m(0+i*ns_unit) * sin(phi(0+i*ns_unit)) * sin(theta(0+i*ns_unit))
+    my1 = m(1+i*ns_unit) * sin(phi(1+i*ns_unit)) * sin(theta(1+i*ns_unit))
+    my2 = m(2+i*ns_unit) * sin(phi(2+i*ns_unit)) * sin(theta(2+i*ns_unit))
+    
+    !! mz for three sites in the unit cell
+    mz0 = m(0+i*ns_unit) *  cos(theta(0+i*ns_unit))
+    mz1 = m(1+i*ns_unit) *  cos(theta(1+i*ns_unit))
+    mz2 = m(2+i*ns_unit) *  cos(theta(2+i*ns_unit))
+    
+    !! diagonal element for site 0 for up and dn spins
+    hamiltonian(id0,id0) =  -(-charge_confs(0+i*ns_unit)) - (0.5*u_int)*mz0
+    hamiltonian(id0n,id0n) = -(-charge_confs(0+i*ns_unit)) + (0.5*u_int)*mz0
+
+    !! diagonal element for site 1 for up and dn spins
+    hamiltonian(id1,id1) =  -(-charge_confs(1+i*ns_unit)) - (0.5*u_int)*mz1
+    hamiltonian(id1n,id1n) = -(-charge_confs(1+i*ns_unit)) + (0.5*u_int)*mz1
+
+    !! diagonal element for site20 for up and dn spins
+    hamiltonian(id2,id2) =  -(-charge_confs(2+i*ns_unit)) - (0.5*u_int)*mz2
+    hamiltonian(id2n,id2n) = -(-charge_confs(2+i*ns_unit)) + (0.5*u_int)*mz2
+
+    ! setting the updn and dnup components for site 0 in the unit cell
+    hamiltonian(id0,id0n) = -(0.5*u_int)*cmplx(mx0,-my0)
+    hamiltonian(id0n,id0) = -(0.5*u_int)*cmplx(mx0,my0)
+
+
+    ! setting the updn and dnup components for site 1 in the unit cell
+    hamiltonian(id1,id1n) = -(0.5*u_int)*cmplx(mx1,-my1)
+    hamiltonian(id1n,id1) = -(0.5*u_int)*cmplx(mx1,my1)
+
+    ! setting the updn and dnup components for site 2 in the unit cell
+    hamiltonian(id2,id2n) = -(0.5*u_int)*cmplx(mx2,-my2)
+    hamiltonian(id2n,id2) = -(0.5*u_int)*cmplx(mx2,my2)
+  end do
+end subroutine hamintpart
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -720,8 +770,8 @@ implicit none
       !print *,si,cl_st(site_clster,si),site_clster
       
     end do
-    call hamclsinitinUnitcell()
-    call hamclsinitOutunitcell()
+    !call hamclsinitinUnitcell()
+    !call hamclsinitOutunitcell()
 
 end subroutine cluster_ham
 
@@ -770,6 +820,7 @@ use varmodule
       hamil_cls(nsi2c,nsi0c) = -t_hopping
       hamil_cls(nsi2c,nsi1c) = -t_hopping
   end do
+  call hamclsinitOutunitcell()
 
 end subroutine hamclsinitinUnitcell
 
