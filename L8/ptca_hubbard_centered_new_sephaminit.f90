@@ -84,6 +84,8 @@ use varmodule
       call cpu_time(t_strt_equil)
       open(81,file='mucalc_L8_cl_6.dat',action='write',position='append')
       !!! Equlibration cycle
+      sum_mu=0.0
+      mu_avg=0.0 
       do i = 0, n_equil, 1
 
         !!! for first 20 steps calculate the mu and use if for rest of the iterations
@@ -123,7 +125,6 @@ use varmodule
           call MPI_BCAST(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           !! loop over all the sites within the partition
-          print *,i,j
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
