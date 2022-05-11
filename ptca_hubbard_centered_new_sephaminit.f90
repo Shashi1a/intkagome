@@ -7,7 +7,7 @@ program ptca_repulsive
 use varmodule 
   implicit none
   include "mpif.h"
-  integer(8) :: i,j,ki
+  integer(8) :: i,j,ki,loc_si1,loc_si2,loc_si3
   integer :: my_id,num_procs !! process id and number of processes
   integer(8) :: site_clster,loc_proc !! local site in the cluster
   real(8) :: rnum                 !! variable used to store intermediate temperature
@@ -19,9 +19,6 @@ use varmodule
   real :: delT , mu_initial 
 
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: copy_ham !! copy of cluster hamiltonian
-
-!!!!!!!!!!!!!!!!!! files names !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  character(len=200):: fname
 
 !!!!!!!!!!!!!!!!!! parameters for the parallelization !!!!!!!!!!!!!!!
   integer :: ierr
@@ -127,12 +124,13 @@ use varmodule
    
     !!! temperature loop over all the temperatures
     do while (tvar > t_min)
-      !print *,tvar,"started"
+      print *,tvar,"started"
       call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
       !! time when the equilibration started
       call cpu_time(t_strt_equil)
-      !open(81,file='mucalc_L8_cl_6.dat',action='write',position='append')
+      call print_f()
+
       
       !!! Equlibration cycle
       do i = 0, n_equil, 1
@@ -140,6 +138,7 @@ use varmodule
         !!! for first 20 steps calculate the mu and use if for rest of the iterations
         !!! form a cluster centered around site 0
         if (i<mu_cnf) then
+            open(81,file=fname_mu,action='write',position='append')
             !! form a cluster centered around site 0
             !site_clster = 0
             !mu = 0.0 !! set mu to zero for this calculation
@@ -160,9 +159,10 @@ use varmodule
             mu_init = 0.5*(egval_fl(int(0.5*dim_h)-1)+egval_fl(int(0.5*dim_h)))
             mu = mu_init
             sum_mu  = sum_mu + mu_init
-            print *,my_id,i,mu,int(0.5*dim_clsh),egval_fl(int(0.5*dim_h)),egval_fl(int(0.5*dim_h)-1)
+            !print *,my_id,i,mu,int(0.5*dim_clsh),egval_fl(int(0.5*dim_h)),egval_fl(int(0.5*dim_h)-1)
             !print *,my_id,i,mu,egval_fl(dim_h-1),egval_fl(0)
-            !write(81,*) tvar,i,mu_init
+            write(81,*) tvar,i,mu_init
+            close(81)
         else  
             mu_avg = sum_mu/mu_cnf
             mu = mu_avg
@@ -216,15 +216,18 @@ use varmodule
               !! loop over the loc_ids array and get the site index that is updated
               do ki=0,split_sites-1,1
                 if (loc_ids(ki)>=0) then
-                  m(0+(loc_ids(ki)*ns_unit)) = m_loc(0+(loc_ids(ki)*ns_unit))
-                  m(1+(loc_ids(ki)*ns_unit)) = m_loc(1+(loc_ids(ki)*ns_unit))
-                  m(2+(loc_ids(ki)*ns_unit)) = m_loc(2+(loc_ids(ki)*ns_unit))
-                  theta(0+(loc_ids(ki)*ns_unit)) = loc_theta(0+(loc_ids(ki)*ns_unit))
-                  theta(1+(loc_ids(ki)*ns_unit)) = loc_theta(1+(loc_ids(ki)*ns_unit))
-                  theta(2+(loc_ids(ki)*ns_unit)) = loc_theta(2+(loc_ids(ki)*ns_unit))
-                  phi(0+(loc_ids(ki)*ns_unit)) = loc_phi(0+(loc_ids(ki)*ns_unit))
-                  phi(1+(loc_ids(ki)*ns_unit)) = loc_phi(1+(loc_ids(ki)*ns_unit))
-                  phi(2+(loc_ids(ki)*ns_unit)) = loc_phi(2+(loc_ids(ki)*ns_unit))
+                  loc_si1 = 0+(loc_ids(ki)*ns_unit)
+                  loc_si2 = loc_si1+1
+                  loc_si3 = 2+loc_si1
+                  m(loc_si1) = m_loc(loc_si1)
+                  m(loc_si2) = m_loc(loc_si2)
+                  m(loc_si3) = m_loc(loc_si3)
+                  theta(loc_si1) = loc_theta(loc_si1)
+                  theta(loc_si2) = loc_theta(loc_si2)
+                  theta(loc_si3) = loc_theta(loc_si3)
+                  phi(loc_si1) = loc_phi(loc_si1)
+                  phi(loc_si2) = loc_phi(loc_si2)
+                  phi(loc_si3) = loc_phi(loc_si3)
                 endif
               enddo
             end do
@@ -271,7 +274,7 @@ use varmodule
       !! time when the equilibration cycle finishes
       call cpu_time(t_end_equil)
       delT  = t_end_equil-t_strt_equil
-      open(21,file='total_equilibration_time_L10_cl8',action='write',position='append')
+      open(21,file=fname_eqt,action='write',position='append')
       if (my_id==0) then
           write(21,*) my_id, tvar,delT 
           do i=1,num_procs-1,1
@@ -286,7 +289,7 @@ use varmodule
       !!! measurement cycle
       call cpu_time(t_strt_meas)
       do i = 0,n_meas-1, 1
-        print *,'measurement loop with temp',tvar
+        !print *,'measurement loop with temp',tvar
         !! loop over all partition of the lattice
         
         do j=0,n_splits-1,1
@@ -332,15 +335,18 @@ use varmodule
               !!! set the variables arrays in master using values from other slave processes
               do ki=0,split_sites-1,1
               if (loc_ids(ki)>=0) then
-                m(0+(loc_ids(ki)*ns_unit)) = m_loc(0+(loc_ids(ki)*ns_unit))
-                m(1+(loc_ids(ki)*ns_unit)) = m_loc(1+(loc_ids(ki)*ns_unit))
-                m(2+(loc_ids(ki)*ns_unit)) = m_loc(2+(loc_ids(ki)*ns_unit))
-                theta(0+(loc_ids(ki)*ns_unit)) = loc_theta(0+(loc_ids(ki)*ns_unit))
-                theta(1+(loc_ids(ki)*ns_unit)) = loc_theta(1+(loc_ids(ki)*ns_unit))
-                theta(2+(loc_ids(ki)*ns_unit)) = loc_theta(2+(loc_ids(ki)*ns_unit))
-                phi(0+(loc_ids(ki)*ns_unit)) = loc_phi(0+(loc_ids(ki)*ns_unit))
-                phi(1+(loc_ids(ki)*ns_unit)) = loc_phi(1+(loc_ids(ki)*ns_unit))
-                phi(2+(loc_ids(ki)*ns_unit)) = loc_phi(2+(loc_ids(ki)*ns_unit))              
+                loc_si1 = 0+(loc_ids(ki)*ns_unit)
+                  loc_si2 = loc_si1+1
+                  loc_si3 = 2+loc_si1
+                  m(loc_si1) = m_loc(loc_si1)
+                  m(loc_si2) = m_loc(loc_si2)
+                  m(loc_si3) = m_loc(loc_si3)
+                  theta(loc_si1) = loc_theta(loc_si1)
+                  theta(loc_si2) = loc_theta(loc_si2)
+                  theta(loc_si3) = loc_theta(loc_si3)
+                  phi(loc_si1) = loc_phi(loc_si1)
+                  phi(loc_si2) = loc_phi(loc_si2)
+                  phi(loc_si3) = loc_phi(loc_si3)            
                endif
               enddo
             end do
@@ -386,10 +392,9 @@ use varmodule
         if (my_id==0) then 
         if (mod(i,meas_skip)==0) then
           
-          call print_f(fname)
-          print *,i,tvar,fname
+          print *,i,tvar,fname_conf
 
-          open(16,file=fname,action='write',position='append')
+          open(16,file=fname_conf,action='write',position='append')
           do j=0,n_sites-1,1
             write(16,20) i,j,m(0+j*ns_unit),m(1+j*ns_unit),m(2+ns_unit*j),theta(0+j*ns_unit),theta(1+j*ns_unit),theta(2+j*ns_unit),&
             phi(0+j*ns_unit),phi(1+j*ns_unit),phi(2+j*ns_unit)
@@ -406,7 +411,7 @@ use varmodule
       call cpu_time(t_end_meas)
       delT = t_end_meas-t_strt_meas 
       print *,'measurement time elapsed', delT,my_id
-      open(22,file='total_measurement_time_L10_cl8',action='write',position='append')
+      open(22,file=fname_meast,action='write',position='append')
       if (my_id==0) then
           write(22,*) my_id, tvar, delT 
           do i=1,num_procs-1,1
@@ -1067,8 +1072,6 @@ implicit none
   call zheevd('V','U', dim_clsh, temp_clsham, dim_clsh, egval, work, lwork, &
                                            rwork, lrwork, iwork, liwork, info)
   
-  
-  
   !print *,site_clster,(site_clster*ns_unit)+si,egval(int(0.5*dim_clsh)+1),egval(int(0.5*dim_clsh)),egval(0),mu
   !print *,ns_unit,si,si+(ns_unit*site_clster),site_clster
   !!! call subroutine to calculate the energy
@@ -1178,7 +1181,7 @@ end subroutine enr_calc
 !!-----------------------------------------------------------------------------!!
 !!-------------------- printing -----------------------------------------------!!
 !!-----------------------------------------------------------------------------!!
-subroutine print_f(fname)
+subroutine print_f()
 use varmodule
 implicit none
 
@@ -1190,7 +1193,6 @@ implicit none
    character(len=20):: str_2
    character(len=20):: str_3
    character(len=20)::str_4   
-   character(len=200):: fname
 
    !!! set format based on L
    if(L<10)then
@@ -1215,8 +1217,18 @@ implicit none
    write(str_3,format_U)u_int
    write(str_4,format_cls)cls_sites
 
-   fname=trim('sepconfigurations_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
+  fname_conf=trim('mcconfigurations_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
                      //trim(str_3)//trim('_cluster')//trim(str_4)
+
+  fname_eqt=trim('totalEquiltime_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
+                     //trim(str_3)//trim('_cluster')//trim(str_4)
+
+  fname_meast=trim('totalmeastime_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
+                     //trim(str_3)//trim('_cluster')//trim(str_4)
+
+  fname_mu=trim('mu_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
+                     //trim(str_3)//trim('_cluster')//trim(str_4)
+
 !   print*,fname
 
  end subroutine print_f

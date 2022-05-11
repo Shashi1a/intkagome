@@ -4,15 +4,15 @@
 module  varmodule
     implicit none
     integer(8),parameter :: ns_unit = 3
-    integer(8),parameter :: L = 12 !! system size
+    integer(8),parameter :: L = 6 !! system size
     integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
-    integer(8),parameter :: cls_sites =  6 !! cluster size
+    integer(8),parameter :: cls_sites =  4 !! cluster size
     integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
     integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
     integer(8),parameter :: split_sites = n_sites/n_splits
     integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
-    integer(8),parameter :: n_equil  = 10 !! no of equilibrium steps
-    integer(8),parameter :: n_meas  = 1 !! no of measurements
+    integer(8),parameter :: n_equil  = 2 !! no of equilibrium steps
+    integer(8),parameter :: n_meas  = 2 !! no of measurements
     integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
     integer(8),parameter :: dim_h = 6*n_sites  ! dimensionality of hamiltonian
     integer(8),parameter :: dim_clsh = 6*cls_dim ! dimensionality of cluster hamiltonian
@@ -69,10 +69,16 @@ module  varmodule
     integer(8),parameter :: liwork_full = (5*dim_h)+3
     
    
-    complex(8),dimension(lwork_full)::work_full
+    complex(8),dimension(lwork_full) :: work_full
     real(8),dimension(lrwork_full) :: rwork_full
     integer(8),dimension(liwork_full) :: iwork_full
-      
+    
+
+    !!! name for the output files
+    character(len=200) :: fname_conf
+    character(len=200) :: fname_eqt
+    character(len=200) :: fname_meast
+    character(len=200) :: fname_mu
 end module varmodule
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
