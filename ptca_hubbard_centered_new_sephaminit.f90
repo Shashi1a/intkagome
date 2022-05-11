@@ -966,7 +966,6 @@ implicit none
       end do
     end do
   end do
-  
 end subroutine lattice_splt
 !!-----------------------------------------------------------------------------!!
 
@@ -977,26 +976,14 @@ end subroutine lattice_splt
 subroutine mc_sweep(site_clster)
 use varmodule
 implicit none
-  integer(8) :: si,loc_site,site_clster!! local site that is being flipped
-  real(8) ::  mu_loc,sum_mu
-  real(8) :: beta,e_u,e_v,enr_loc
-  real(8)  :: mc_prob
-  
+  integer(8) :: loc_site,site_clster!! local site that is being flipped
+
   
   ! position of global site in the cluster (center)
   loc_site = int((0.5*cls_sites)+cls_sites*(0.5*cls_sites))
 
   !!! updating first site in the unit cell
-  si = 0 
-  call mcsweepUnitCell(loc_site,site_clster,si)
-  
-  !!! trying to update the second site in the unit cell
-  si = 1 
-  call mcsweepUnitCell(loc_site,site_clster,si)
-
-  !!! trying to update the third site in the unit cell
-  si = 2
-  call mcsweepUnitCell(loc_site,site_clster,si)
+  call mcsweepUnitCell(loc_site,site_clster)
 end subroutine mc_sweep
 !! ---------------------------------------------------------------------------!!
 
@@ -1004,42 +991,93 @@ end subroutine mc_sweep
 !! --------------  monte carlo sweep for the unit cell------------------------!!
 !! ---------------------------------------------------------------------------!!
 
-subroutine mcsweepUnitCell(loc_site,site_clster,si)
+subroutine mcsweepUnitCell(loc_site,site_clster)
 use varmodule
 implicit none
-  integer(8) :: si,loc_site,sil,silc,silt,siltn,site_clster !! index of site in the cluster
+  integer(8) :: loc_site,site_clster !! index of site in the cluster
+  integer(8) :: sil0,silc0,silt0,siltn0
+  integer(8) :: sil1,silc1,silt1,siltn1
+  integer(8) :: sil2,silc2,silt2,siltn2
+
   real(8) :: beta,e_u,e_v,enr_loc,mc_prob
 
- 
   !!! variables for the monte carlo procedure
-  real(8) :: mx,my,mz ! to store initial value of mx,my,mz 
+  real(8) :: mx0,my0,mz0 ! mx,my,mz for site 0 in the unit cell 
+  real(8) :: mx1,my1,mz1 ! mx,my,mz for site 1 in the unit cell 
+  real(8) :: mx2,my2,mz2 ! mx,my,mz for site 2 in the unit cell 
+  
   real(8) :: rand1, rand2 , rand3 ! random number to generate,m,theta,phi
   real(8) :: rand_int1,rand_int2, rand_int3
-  real(8) :: delE,tempm,temptheta,tempphi !! store temp value of m,theta,phi for site 0
- 
+  real(8) :: delE
+  real(8) :: tempm0,temptheta0,tempphi0 !! store temp value of m,theta,phi for site 0
+  real(8) :: tempm1,temptheta1,tempphi1 
+  real(8) :: tempm2,temptheta2,tempphi2 
+
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: temp_clsham,temp2_clsham !! to store a copy of the cluster hamiltonian 
   real(8),dimension(0:ns_unit*n_sites-1) :: loc_m  !! local m array
 
-  
+  !!!! generate variables for mx0,my0,mz0
   call random_number(rand1)
   call random_number(rand2)
   call random_number(rand3)
 
   !! temp m
   rand_int1=rand1*5000
-  tempm=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
+  tempm0=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
   
   !! temp theta
   rand_int2=rand2*1000
-  temptheta=acos(-1.0_8+(rand_int2/500.0))
+  temptheta0=acos(-1.0_8+(rand_int2/500.0))
   
   !! temp phi
   rand_int3=rand3*2000
-  tempphi=(2.0_8*pi)*(rand_int3/2000.0)
+  tempphi0=(2.0_8*pi)*(rand_int3/2000.0)
 
-  mx = tempm * cos(tempphi) * sin(temptheta)
-  my = tempm * sin(tempphi) * sin(temptheta)
-  mz = tempm * cos(temptheta)
+  mx0 = tempm0 * cos(tempphi0) * sin(temptheta0)
+  my0 = tempm0 * sin(tempphi0) * sin(temptheta0)
+  mz0 = tempm0 * cos(temptheta0)
+  
+  !!!! generate variables for mx1,my1,mz1 
+  call random_number(rand1)
+  call random_number(rand2)
+  call random_number(rand3)
+
+  !! temp m
+  rand_int1=rand1*5000
+  tempm1=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
+  
+  !! temp theta
+  rand_int2=rand2*1000
+  temptheta1=acos(-1.0_8+(rand_int2/500.0))
+  
+  !! temp phi
+  rand_int3=rand3*2000
+  tempphi1=(2.0_8*pi)*(rand_int3/2000.0)
+
+  mx1 = tempm1 * cos(tempphi1) * sin(temptheta1)
+  my1 = tempm1 * sin(tempphi1) * sin(temptheta1)
+  mz1 = tempm1 * cos(temptheta1)
+  
+  !!!! generate variables for mx2,my2,mz2
+  call random_number(rand1)
+  call random_number(rand2)
+  call random_number(rand3)
+
+  !! temp m
+  rand_int1=rand1*5000
+  tempm2=((((m_min)**3)+(((m_max)**3)-((m_min)**3)))*(rand_int1/5000.0))**(1.0_8/3.0_8)
+  
+  !! temp theta
+  rand_int2=rand2*1000
+  temptheta2=acos(-1.0_8+(rand_int2/500.0))
+  
+  !! temp phi
+  rand_int3=rand3*2000
+  tempphi2=(2.0_8*pi)*(rand_int3/2000.0)
+
+  mx2 = tempm2 * cos(tempphi2) * sin(temptheta2)
+  my2 = tempm2 * sin(tempphi2) * sin(temptheta2)
+  mz2 = tempm2 * cos(temptheta2)
   
   temp_clsham(:,:)  = hamil_cls(:,:)
   loc_m =  m
@@ -1056,17 +1094,38 @@ implicit none
   temp_clsham(:,:) = cmplx(0.0,0.0)
   temp_clsham(:,:) = hamil_cls(:,:)
   
-  !! pick a site where you want to update the monte carlo variable
-  sil = si + (loc_site * ns_unit)  
-  silc = sil + (ns_unit*cls_dim)
+  !!! position of sites in in a given unit cell
+  sil0 = 0 + (loc_site * ns_unit);  sil1 = sil0 + 1  ;  sil2 = sil0 + 2
+  silc0 = sil0 + (ns_unit*cls_dim);  silc1 = silc0+1;  silc2 = silc0 + 2
 
-  temp_clsham(sil,sil) =  -(mu-charge_confs(silt)) - (0.5*u_int)*mz
-  temp_clsham(silc,silc) = -(mu-charge_confs(silt)) + (0.5*u_int)*mz
+  !!! mapping site in the cluster to the lattice
+  silt0 = 0+(site_clster*ns_unit) 
+  silt1 = silt0 + 1 ; silt2 = silt0 + 2
+  siltn0 = silt0 + (ns_unit*n_sites) !! positin of the cluster center for the down spin
+  siltn1 = siltn0 + 1 ; siltn2 = siltn0 + 2
 
-  temp_clsham(sil,silc) =  -(0.5*u_int)*cmplx(mx,-my)
-  temp_clsham(silc,sil) = -(0.5*u_int)*cmplx(mx,my)
+  !!! updating cluster hamiltonian for site 0
+  temp_clsham(sil0,sil0) =  -(mu-charge_confs(silt0)) - (0.5*u_int)*mz0
+  temp_clsham(silc0,silc0) = -(mu-charge_confs(silt0)) + (0.5*u_int)*mz0
+  temp_clsham(sil0,silc0) =  -(0.5*u_int)*cmplx(mx0,-my0)
+  temp_clsham(silc0,sil0) = -(0.5*u_int)*cmplx(mx0,my0)
   
-  loc_m(si+(site_clster*ns_unit)) = tempm
+  !!! updating cluster hamiltonian for site 1
+  temp_clsham(sil1,sil1) =  -(mu-charge_confs(silt1)) - (0.5*u_int)*mz1
+  temp_clsham(silc1,silc1) = -(mu-charge_confs(silt1)) + (0.5*u_int)*mz1
+  temp_clsham(sil1,silc1) =  -(0.5*u_int)*cmplx(mx1,-my1)
+  temp_clsham(silc1,sil1) = -(0.5*u_int)*cmplx(mx1,my1)
+  
+ !!! updating cluster hamiltonian for site 2
+  temp_clsham(sil2,sil2) =  -(mu-charge_confs(silt2)) - (0.5*u_int)*mz2
+  temp_clsham(silc2,silc2) = -(mu-charge_confs(silt2)) + (0.5*u_int)*mz2
+  temp_clsham(sil2,silc2) =  -(0.5*u_int)*cmplx(mx2,-my2)
+  temp_clsham(silc2,sil2) = -(0.5*u_int)*cmplx(mx2,my2)
+
+  
+  loc_m(silt0) = tempm0
+  loc_m(silt1) = tempm1
+  loc_m(silt2) = tempm2
   
   !!! call diagonalization subroutine
   call zheevd('V','U', dim_clsh, temp_clsham, dim_clsh, egval, work, lwork, &
@@ -1078,57 +1137,106 @@ implicit none
   call enr_calc(loc_m,enr_loc,site_clster)
   e_v = enr_loc
   
-  
-  silt = si+(site_clster*ns_unit)  !! position of the cluster center in the lattice
-  siltn = silt + (ns_unit*n_sites) !! positin of the cluster center for the down spin
-  
   !print *,'si:',si,site_clster,loc_site,si,sil,silc,silt,siltn
   
   !! calculate the energy difference
   delE = e_v - e_u
   beta = 1./tvar
   if (delE < 0.0) then
-    m(silt) = tempm  !! update m 
-    theta(silt) = temptheta !! update theta
-    phi(silt) = tempphi  !! update phi
+    m(silt0) = tempm0  !! update m 
+    theta(silt0) = temptheta0 !! update theta
+    phi(silt0) = tempphi0  !! update phi
+    m(silt1) = tempm1  !! update m 
+    theta(silt1) = temptheta1 !! update theta
+    phi(silt1) = tempphi1  !! update phi
+    m(silt2) = tempm1  !! update m 
+    theta(silt2) = temptheta1 !! update theta
+    phi(silt2) = tempphi1  !! update phi
+      
+    !!! updating cluster hamiltonian for site 0
+    hamil_cls(sil0,sil0) =  -(mu-charge_confs(silt0)) - (0.5*u_int)*mz0
+    hamil_cls(silc0,silc0) = -(mu-charge_confs(silt0)) + (0.5*u_int)*mz0
+    hamil_cls(sil0,silc0) =  -(0.5*u_int)*cmplx(mx0,-my0)
+    hamil_cls(silc0,sil0) = -(0.5*u_int)*cmplx(mx0,my0)
     
-    !! updating the cluster hamiltonian 
-    hamil_cls(sil,sil) = -(mu-charge_confs(silt)) - (0.5*u_int)*mz
-    hamil_cls(silc,silc) = -(mu-charge_confs(silt)) + (0.5*u_int)*mz
-
-    !! updating the cluster hamiltonian 
-    hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
-    hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
+    !!! updating cluster hamiltonian for site 1
+    hamil_cls(sil1,sil1) =  -(mu-charge_confs(silt1)) - (0.5*u_int)*mz1
+    hamil_cls(silc1,silc1) = -(mu-charge_confs(silt1)) + (0.5*u_int)*mz1
+    hamil_cls(sil1,silc1) =  -(0.5*u_int)*cmplx(mx1,-my1)
+    hamil_cls(silc1,sil1) = -(0.5*u_int)*cmplx(mx1,my1)
+    
+    !!! updating cluster hamiltonian for site 2
+    hamil_cls(sil2,sil2) =  -(mu-charge_confs(silt2)) - (0.5*u_int)*mz2
+    hamil_cls(silc2,silc2) = -(mu-charge_confs(silt2)) + (0.5*u_int)*mz2
+    hamil_cls(sil2,silc2) =  -(0.5*u_int)*cmplx(mx2,-my2)
+    hamil_cls(silc2,sil2) = -(0.5*u_int)*cmplx(mx2,my2)
 
     !! updating the full hamiltonian with the new monte carlo variables  
-    hamiltonian(silt,silt) = -(-charge_confs(silt)) - (0.5*u_int)*mz
-    hamiltonian(siltn,siltn) = -(-charge_confs(silt)) + (0.5*u_int)*mz
-    hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
-    hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
+    hamiltonian(silt0,silt0) = -(-charge_confs(silt0)) - (0.5*u_int)*mz0
+    hamiltonian(silt1,silt1) = -(-charge_confs(silt0)) + (0.5*u_int)*mz0
+    hamiltonian(silt0,siltn0) = -(0.5*u_int)*cmplx(mx0,-my0)
+    hamiltonian(siltn0,silt0) = -(0.5*u_int)*cmplx(mx0,my0)
+
+    hamiltonian(silt1,silt1) = -(-charge_confs(silt1)) - (0.5*u_int)*mz1
+    hamiltonian(siltn1,siltn1) = -(-charge_confs(silt1)) + (0.5*u_int)*mz1
+    hamiltonian(silt1,siltn1) = -(0.5*u_int)*cmplx(mx1,-my1)
+    hamiltonian(siltn1,silt1) = -(0.5*u_int)*cmplx(mx1,my1)
+
+    hamiltonian(silt2,silt2) = -(-charge_confs(silt2)) - (0.5*u_int)*mz2
+    hamiltonian(siltn2,siltn2) = -(-charge_confs(silt2)) + (0.5*u_int)*mz2
+    hamiltonian(silt2,siltn2) = -(0.5*u_int)*cmplx(mx2,-my2)
+    hamiltonian(siltn2,silt2) = -(0.5*u_int)*cmplx(mx2,my2)
+
+
 
   else 
     !! if the energy is not lowered update the site with the probability exp(-beta*delE)
     call random_number(mc_prob)
     
     if (mc_prob < exp(-beta*delE)) then
-        m(silt) = tempm  !! update m 
-        theta(silt) = temptheta !! update theta
-        phi(silt) = tempphi  !! update phi
+        m(silt0) = tempm0  !! update m 
+        theta(silt0) = temptheta0 !! update theta
+        phi(silt0) = tempphi0  !! update phi
+        m(silt1) = tempm1  !! update m 
+        theta(silt1) = temptheta1 !! update theta
+        phi(silt1) = tempphi1  !! update phi
+        m(silt2) = tempm1  !! update m 
+        theta(silt2) = temptheta1 !! update theta
+        phi(silt2) = tempphi1  !! update phi
     
-        !! updating the cluster hamiltonian 
-        hamil_cls(sil,sil) = -(mu-charge_confs(silt)) - (0.5*u_int)*mz
-        hamil_cls(silc,silc) = -(mu-charge_confs(silt)) + (0.5*u_int)*mz
+        !!! updating cluster hamiltonian for site 0
+        hamil_cls(sil0,sil0) =  -(mu-charge_confs(silt0)) - (0.5*u_int)*mz0
+        hamil_cls(silc0,silc0) = -(mu-charge_confs(silt0)) + (0.5*u_int)*mz0
+        hamil_cls(sil0,silc0) =  -(0.5*u_int)*cmplx(mx0,-my0)
+        hamil_cls(silc0,sil0) = -(0.5*u_int)*cmplx(mx0,my0)
+        
+        !!! updating cluster hamiltonian for site 1
+        hamil_cls(sil1,sil1) =  -(mu-charge_confs(silt1)) - (0.5*u_int)*mz1
+        hamil_cls(silc1,silc1) = -(mu-charge_confs(silt1)) + (0.5*u_int)*mz1
+        hamil_cls(sil1,silc1) =  -(0.5*u_int)*cmplx(mx1,-my1)
+        hamil_cls(silc1,sil1) = -(0.5*u_int)*cmplx(mx1,my1)
+        
+        !!! updating cluster hamiltonian for site 2
+        hamil_cls(sil2,sil2) =  -(mu-charge_confs(silt2)) - (0.5*u_int)*mz2
+        hamil_cls(silc2,silc2) = -(mu-charge_confs(silt2)) + (0.5*u_int)*mz2
+        hamil_cls(sil2,silc2) =  -(0.5*u_int)*cmplx(mx2,-my2)
+        hamil_cls(silc2,sil2) = -(0.5*u_int)*cmplx(mx2,my2)
 
-        !! updating the cluster hamiltonian 
-        hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
-        hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
+        !! updating the full hamiltonian with the new monte carlo variables  
+        hamiltonian(silt0,silt0) = -(-charge_confs(silt0)) - (0.5*u_int)*mz0
+        hamiltonian(silt1,silt1) = -(-charge_confs(silt0)) + (0.5*u_int)*mz0
+        hamiltonian(silt0,siltn0) = -(0.5*u_int)*cmplx(mx0,-my0)
+        hamiltonian(siltn0,silt0) = -(0.5*u_int)*cmplx(mx0,my0)
 
-        !! updating the full hamiltonian with the new monte carlo variables
-        hamiltonian(silt,silt) = -(-charge_confs(silt)) - (0.5*u_int)*mz
-        hamiltonian(siltn,siltn) = -(-charge_confs(silt)) + (0.5*u_int)*mz
-        hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
-        hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
+        hamiltonian(silt1,silt1) = -(-charge_confs(silt1)) - (0.5*u_int)*mz1
+        hamiltonian(siltn1,siltn1) = -(-charge_confs(silt1)) + (0.5*u_int)*mz1
+        hamiltonian(silt1,siltn1) = -(0.5*u_int)*cmplx(mx1,-my1)
+        hamiltonian(siltn1,silt1) = -(0.5*u_int)*cmplx(mx1,my1)
 
+        hamiltonian(silt2,silt2) = -(-charge_confs(silt2)) - (0.5*u_int)*mz2
+        hamiltonian(siltn2,siltn2) = -(-charge_confs(silt2)) + (0.5*u_int)*mz2
+        hamiltonian(silt2,siltn2) = -(0.5*u_int)*cmplx(mx2,-my2)
+        hamiltonian(siltn2,silt2) = -(0.5*u_int)*cmplx(mx2,my2)
 
     end if
   end if
