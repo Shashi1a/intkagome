@@ -58,7 +58,7 @@ use varmodule
     !! since we have broadcasted monte carlo variables to all processes all of them will 
     !! have the same hamiltonian.
     
-    !! set the hamiltonian and the copy to be zero
+    !! initialize the hamiltonian and its copy to  zero
     hamiltonian(:,:) = cmplx(0.0,0.0)
     ham_noint = cmplx(0.0,0.0)
 
@@ -71,29 +71,44 @@ use varmodule
     !!! set the interacting part of the hamiltonian
     call ham_init()
 
-    !! initialize all the matrix elements to zero 
+    !! initialize all the cluster hamiltonian matrix elements to zero 
     hamil_cls(:,:) = cmplx(0.0,0.0) 
     hamcls_noint(:,:) = cmplx(0.0,0.0)
 
-    !! get the cluster hamiltonian for the non interacting system
-    !call hamclsinitinUnitcell()
+    !! get the non interacting cluster hamiltonian
+    call hamclsinitinUnitcell()
+    
+    !! copy the non interacting cluster hamiltonian
+    hamcls_noint(:,:) = hamil_cls(:,:)
+
     !call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
     !                                       rwork, lrwork, iwork, liwork, info)
                
     !print *,egval(0),egval(dim_clsh-1)
  
-    call zheevd('V','U', dim_h, hamiltonian, dim_h, egval_fl, work_full, lwork_full, &
-                                           rwork_full, lrwork_full, iwork_full, liwork_full, info)
+    !call zheevd('V','U', dim_h, hamiltonian, dim_h, egval_fl, work_full, lwork_full, &
+    !                                       rwork_full, lrwork_full, iwork_full, liwork_full, info)
+    !print *,egval_fl(0),egval_fl(dim_h-1),egval_fl(int(0.5*dim_h)),egval_fl(int(0.5*dim_h)-1)
 
-    print *,egval_fl(0),egval_fl(dim_h-1)
+    !hamiltonian(:,:) = cmplx(0.0,0.0)
+    !hamiltonian(:,:) = ham_noint(:,:)
+    !mu = (egval_fl(int(0.5*dim_h))+egval_fl(int(0.5*dim_h)-1))*0.5
+    !mu = 0.0
+    !!! set the interacting and diagonal part of the hamiltonian
+    !call ham_init()
 
-    open(89,file='eigenval.dat',action='write',position='append')            
-    do i=0,dim_h-1,1
-      write(89,*) egval_fl(i)
-    end do
-    close(89)                
-    !! copy the non interacting cluster hamiltonian
-    hamcls_noint(:,:) = hamil_cls(:,:)
+    !call zheevd('V','U', dim_h, hamiltonian, dim_h, egval_fl, work_full, lwork_full, &
+    !                                       rwork_full, lrwork_full, iwork_full, liwork_full, info)
+
+    !print *,'mus',egval_fl(0),egval_fl(dim_h-1),egval_fl(int(0.5*dim_h)),egval_fl(int(0.5*dim_h)-1)
+
+
+    !open(89,file='eigenval_L16_nomufix.dat',action='write',position='append')            
+    !do i=0,dim_h-1,1
+    !  write(89,*) egval_fl(i)
+    !end do
+    !close(89)                
+    
 
     !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -112,7 +127,7 @@ use varmodule
    
     !!! temperature loop over all the temperatures
     do while (tvar > t_min)
-      print *,tvar,"started"
+      !print *,tvar,"started"
       call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
       !! time when the equilibration started
@@ -120,33 +135,39 @@ use varmodule
       !open(81,file='mucalc_L8_cl_6.dat',action='write',position='append')
       
       !!! Equlibration cycle
-      do i = 0, 0, 1
+      do i = 0, n_equil, 1
       
         !!! for first 20 steps calculate the mu and use if for rest of the iterations
         !!! form a cluster centered around site 0
         if (i<mu_cnf) then
             !! form a cluster centered around site 0
-            site_clster = 0
-            mu = 0.0 !! set mu to zero for this calculation
-            hamil_cls(:,:) = cmplx(0.0,0.0) !! set all matrix element to zero
-            hamil_cls(:,:) = hamcls_noint(:,:) !! set the non interacting part of the hamiltonian
-            call cluster_ham(site_clster)  !! set the diagonal elements
-            info  = 10
-            call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
-                                           rwork, lrwork, iwork, liwork, info)
+            !site_clster = 0
+            !mu = 0.0 !! set mu to zero for this calculation
+            !hamil_cls(:,:) = cmplx(0.0,0.0) !! set all matrix element to zero
+            !hamil_cls(:,:) = hamcls_noint(:,:) !! set the non interacting part of the hamiltonian
+            !call cluster_ham(site_clster)  !! set the diagonal elements
+            !info  = 10
+            !call zheevd('V','U', dim_clsh, hamil_cls, dim_clsh, egval, work, lwork, &
+            !                               rwork, lrwork, iwork, liwork, info)
             
-            mu_init = 0.5 *(egval(int(0.5*dim_clsh)-1)+egval(int(0.5*dim_clsh)))
+            hamiltonian(:,:) = cmplx(0.0,0.0)
+            hamiltonian(:,:) = ham_noint(:,:)
+            call ham_init()
+            info = 10
+            call zheevd('V','U', dim_h, hamiltonian, dim_h, egval_fl, work_full, lwork_full, &
+                                           rwork_full, lrwork_full, iwork_full, liwork_full, info)
+            
+            mu_init = 0.5*(egval_fl(int(0.5*dim_h)-1)+egval_fl(int(0.5*dim_h)))
             mu = mu_init
             sum_mu  = sum_mu + mu_init
-            print *,my_id,i,mu,int(0.5*dim_clsh),egval(int(0.5*dim_clsh)),egval(int(0.5*dim_clsh)-1)
-            !print *,my_id,i,mu,egval(dim_clsh-1),egval(0)
-
+            print *,my_id,i,mu,int(0.5*dim_clsh),egval_fl(int(0.5*dim_h)),egval_fl(int(0.5*dim_h)-1)
+            !print *,my_id,i,mu,egval_fl(dim_h-1),egval_fl(0)
             !write(81,*) tvar,i,mu_init
         else  
             mu_avg = sum_mu/mu_cnf
             mu = mu_avg
             !write(81,*) tvar,i,mu 
-            print *,i,my_id,mu,mu_avg,int(0.5*dim_clsh)
+            !print *,i,my_id,mu,mu_avg,int(0.5*dim_clsh)
         end if
         
         !!! loop over all the splits 
@@ -171,10 +192,10 @@ use varmodule
             
             !  print *,'before sweep',my_id,site_clster
             !! initialize cluster hamiltonian 
-            !! set all elements to zero
-            !! copy the non interacting hamiltonian
-            hamil_cls(:,:) = cmplx(0.0,0.0)
-            hamil_cls(:,:) = hamcls_noint(:,:)
+            hamil_cls(:,:) = cmplx(0.0,0.0) !! set all elements to zero
+            hamil_cls(:,:) = hamcls_noint(:,:) !! copy the non interacting hamiltonian
+            
+            !! initialize the diagonal part
             call cluster_ham(site_clster)
             
             !!  try to update the mc variables at the given site
@@ -235,9 +256,9 @@ use varmodule
 
         !! initializing the most updated hamiltonian using the updated
         !! monte carlo configurations of m,theta and phi
-        hamiltonian(:,:) = cmplx(0.0,0.0)
-        hamiltonian(:,:) = ham_noint(:,:)
-        call ham_init()
+        hamiltonian(:,:) = cmplx(0.0,0.0) !! initialize the hamiltonian to zero
+        hamiltonian(:,:) = ham_noint(:,:) !! copy the non interacting part
+        call ham_init()  !! intializing the interacting part
 
       end do
       call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -1034,13 +1055,13 @@ implicit none
   sil = si + (loc_site * ns_unit)  
   silc = sil + (ns_unit*cls_dim)
 
-  temp_clsham(sil,sil) =  -(mu-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
-  temp_clsham(silc,silc) = -(mu-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
+  temp_clsham(sil,sil) =  -(mu-charge_confs(silt)) - (0.5*u_int)*mz
+  temp_clsham(silc,silc) = -(mu-charge_confs(silt)) + (0.5*u_int)*mz
 
   temp_clsham(sil,silc) =  -(0.5*u_int)*cmplx(mx,-my)
   temp_clsham(silc,sil) = -(0.5*u_int)*cmplx(mx,my)
   
-  loc_m(si+site_clster*ns_unit) = tempm
+  loc_m(si+(site_clster*ns_unit)) = tempm
   
   !!! call diagonalization subroutine
   call zheevd('V','U', dim_clsh, temp_clsham, dim_clsh, egval, work, lwork, &
@@ -1064,21 +1085,21 @@ implicit none
   delE = e_v - e_u
   beta = 1./tvar
   if (delE < 0.0) then
-    m(si+site_clster*ns_unit) = tempm  !! update m 
-    theta(si+site_clster*ns_unit) = temptheta !! update theta
-    phi(si+site_clster*ns_unit) = tempphi  !! update phi
+    m(silt) = tempm  !! update m 
+    theta(silt) = temptheta !! update theta
+    phi(silt) = tempphi  !! update phi
     
     !! updating the cluster hamiltonian 
-    hamil_cls(sil,sil) = -(mu-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
-    hamil_cls(silc,silc) = -(mu-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
+    hamil_cls(sil,sil) = -(mu-charge_confs(silt)) - (0.5*u_int)*mz
+    hamil_cls(silc,silc) = -(mu-charge_confs(silt)) + (0.5*u_int)*mz
 
     !! updating the cluster hamiltonian 
     hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
     hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
 
     !! updating the full hamiltonian with the new monte carlo variables  
-    hamiltonian(silt,silt) = -(-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
-    hamiltonian(siltn,siltn) = -(-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
+    hamiltonian(silt,silt) = -(-charge_confs(silt)) - (0.5*u_int)*mz
+    hamiltonian(siltn,siltn) = -(-charge_confs(silt)) + (0.5*u_int)*mz
     hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
     hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
 
@@ -1087,21 +1108,21 @@ implicit none
     call random_number(mc_prob)
     
     if (mc_prob < exp(-beta*delE)) then
-        m(si+site_clster*ns_unit) = tempm  !! update m 
-        theta(si+site_clster*ns_unit) = temptheta !! update theta
-        phi(si+site_clster*ns_unit) = tempphi  !! update phi
+        m(silt) = tempm  !! update m 
+        theta(silt) = temptheta !! update theta
+        phi(silt) = tempphi  !! update phi
     
         !! updating the cluster hamiltonian 
-        hamil_cls(sil,sil) = -(mu-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
-        hamil_cls(silc,silc) = -(mu-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
+        hamil_cls(sil,sil) = -(mu-charge_confs(silt)) - (0.5*u_int)*mz
+        hamil_cls(silc,silc) = -(mu-charge_confs(silt)) + (0.5*u_int)*mz
 
         !! updating the cluster hamiltonian 
         hamil_cls(sil,silc) = -(0.5*u_int)*cmplx(mx,-my)
         hamil_cls(silc,sil) =  -(0.5*u_int)*cmplx(mx,my)
 
         !! updating the full hamiltonian with the new monte carlo variables
-        hamiltonian(silt,silt) = -(-charge_confs(si+site_clster*ns_unit)) - (0.5*u_int)*mz
-        hamiltonian(siltn,siltn) = -(-charge_confs(si+site_clster*ns_unit)) + (0.5*u_int)*mz
+        hamiltonian(silt,silt) = -(-charge_confs(silt)) - (0.5*u_int)*mz
+        hamiltonian(siltn,siltn) = -(-charge_confs(silt)) + (0.5*u_int)*mz
         hamiltonian(silt,siltn) = -(0.5*u_int)*cmplx(mx,-my)
         hamiltonian(siltn,silt) = -(0.5*u_int)*cmplx(mx,my)
 
