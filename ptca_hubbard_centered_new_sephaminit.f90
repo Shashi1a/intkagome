@@ -7,7 +7,7 @@ program ptca_repulsive
 use varmodule 
   implicit none
   include "mpif.h"
-  integer(8) :: i,j,ki,loc_si1,loc_si2,loc_si3
+  integer(8) :: i,j,ki,loc_si1,loc_si2,loc_si3,suc0,suc1,suc2
   integer :: my_id,num_procs !! process id and number of processes
   integer(8) :: site_clster,loc_proc !! local site in the cluster
   real(8) :: rnum                 !! variable used to store intermediate temperature
@@ -396,8 +396,9 @@ use varmodule
 
           open(16,file=fname_conf,action='write',position='append')
           do j=0,n_sites-1,1
-            write(16,20) i,j,m(0+j*ns_unit),m(1+j*ns_unit),m(2+ns_unit*j),theta(0+j*ns_unit),theta(1+j*ns_unit),theta(2+j*ns_unit),&
-            phi(0+j*ns_unit),phi(1+j*ns_unit),phi(2+j*ns_unit)
+            suc0 = 0 + (j*ns_unit) ;suc1 = suc0+1 ;suc2 = suc0+2 ;  
+            write(16,20) i,j,m(suc0),m(suc1),m(suc2),theta(suc0),theta(suc1),theta(suc2),&
+            phi(suc0),phi(suc1),phi(suc2)
             20  format(I4,2X,I4,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8,2X,ES22.8)
           end do
           close(16)
@@ -1149,9 +1150,9 @@ implicit none
     m(silt1) = tempm1  !! update m 
     theta(silt1) = temptheta1 !! update theta
     phi(silt1) = tempphi1  !! update phi
-    m(silt2) = tempm1  !! update m 
-    theta(silt2) = temptheta1 !! update theta
-    phi(silt2) = tempphi1  !! update phi
+    m(silt2) = tempm2  !! update m 
+    theta(silt2) = temptheta2 !! update theta
+    phi(silt2) = tempphi2  !! update phi
       
     !!! updating cluster hamiltonian for site 0
     hamil_cls(sil0,sil0) =  -(mu-charge_confs(silt0)) - (0.5*u_int)*mz0
@@ -1200,9 +1201,9 @@ implicit none
         m(silt1) = tempm1  !! update m 
         theta(silt1) = temptheta1 !! update theta
         phi(silt1) = tempphi1  !! update phi
-        m(silt2) = tempm1  !! update m 
-        theta(silt2) = temptheta1 !! update theta
-        phi(silt2) = tempphi1  !! update phi
+        m(silt2) = tempm2  !! update m 
+        theta(silt2) = temptheta2 !! update theta
+        phi(silt2) = tempphi2  !! update phi
     
         !!! updating cluster hamiltonian for site 0
         hamil_cls(sil0,sil0) =  -(mu-charge_confs(silt0)) - (0.5*u_int)*mz0
