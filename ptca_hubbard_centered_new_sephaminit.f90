@@ -131,7 +131,7 @@ use varmodule
       call cpu_time(t_strt_equil)
       call print_f()
 
-      
+      sum_mu = 0.0
       !!! Equlibration cycle
       do i = 0, n_equil, 1
       
@@ -159,8 +159,8 @@ use varmodule
             mu_init = 0.5*(egval_fl(int(0.5*dim_h)-1)+egval_fl(int(0.5*dim_h)))
             mu = mu_init
             sum_mu  = sum_mu + mu_init
-            !print *,my_id,i,mu,int(0.5*dim_clsh),egval_fl(int(0.5*dim_h)),egval_fl(int(0.5*dim_h)-1)
-            !print *,my_id,i,mu,egval_fl(dim_h-1),egval_fl(0)
+            
+            print *,my_id,i,mu,egval_fl(dim_h-1),egval_fl(0),egval_fl(int(0.5*dim_h)-1)
             write(81,*) tvar,i,mu_init
             close(81)
         else  
