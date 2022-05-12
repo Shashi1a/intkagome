@@ -1327,16 +1327,16 @@ implicit none
    write(str_4,format_cls)cls_sites
 
   fname_conf=trim('mcconfigurations_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
-                     //trim(str_3)//trim('_cluster')//trim(str_4)
+                     //trim(str_3)//trim('_cluster')//trim(str_4)//'.dat'
 
   fname_eqt=trim('totalEquiltime_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
-                     //trim(str_3)//trim('_cluster')//trim(str_4)
+                     //trim(str_3)//trim('_cluster')//trim(str_4)//'.dat'
 
   fname_meast=trim('totalmeastime_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
-                     //trim(str_3)//trim('_cluster')//trim(str_4)
+                     //trim(str_3)//trim('_cluster')//trim(str_4)//'.dat'
 
   fname_mu=trim('mu_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
-                     //trim(str_3)//trim('_cluster')//trim(str_4)
+                     //trim(str_3)//trim('_cluster')//trim(str_4)//'.dat'
 
 !   print*,fname
 
