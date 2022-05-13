@@ -160,7 +160,7 @@ use varmodule
             mu = mu_init
             sum_mu  = sum_mu + mu_init
             
-            print *,my_id,i,mu,egval_fl(dim_h-1),egval_fl(0),egval_fl(int(0.5*dim_h)-1)
+            !print *,my_id,i,mu,egval_fl(dim_h-1),egval_fl(0),egval_fl(int(0.5*dim_h)-1)
             write(81,*) tvar,i,mu_init
             close(81)
         else  

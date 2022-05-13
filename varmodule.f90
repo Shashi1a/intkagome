@@ -23,8 +23,8 @@ module  varmodule
     real(8),parameter :: m_min = 0.0_8
     real(8) :: mu  = 0.0 !! chemical potential
     real(8),parameter :: temp = 0.30  !! simulation temperature
-    real(8),parameter :: dtemp = 0.01 !! temperature step to lower the temperature
-    real(8),parameter :: t_min = 0.28 !! minimum temperature for the simulation
+    real(8),parameter :: dtemp = 0.01!! temperature step to lower the temperature
+    real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
     real(8)  :: tvar !! variable used for varying tempreature
     real(8) :: u_int = 1.0 !! interaction strength
 
