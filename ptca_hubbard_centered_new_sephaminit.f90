@@ -1211,6 +1211,7 @@ implicit none
         hamil_cls(sil0,silc0) =  -(0.5*u_int)*cmplx(mx0,-my0)
         hamil_cls(silc0,sil0) = -(0.5*u_int)*cmplx(mx0,my0)
         
+        
         !!! updating cluster hamiltonian for site 1
         hamil_cls(sil1,sil1) =  -(mu-charge_confs(silt1)) - (0.5*u_int)*mz1
         hamil_cls(silc1,silc1) = -(mu-charge_confs(silt1)) + (0.5*u_int)*mz1
