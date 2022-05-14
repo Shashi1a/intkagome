@@ -4,9 +4,9 @@
 module  varmodule
     implicit none
     integer(8),parameter :: ns_unit = 3
-    integer(8),parameter :: L = 12 !! system size
+    integer(8),parameter :: L = 8 !! system size
     integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
-    integer(8),parameter :: cls_sites =  4 !! cluster size
+    integer(8),parameter :: cls_sites =  6 !! cluster size
     integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
     integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
     integer(8),parameter :: split_sites = n_sites/n_splits
