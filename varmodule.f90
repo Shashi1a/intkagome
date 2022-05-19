@@ -4,26 +4,28 @@
 module  varmodule
     implicit none
     integer(8),parameter :: ns_unit = 3
-    integer(8),parameter :: L = 8 !! system size
+    integer(8),parameter :: L = 6 !! system size
     integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
-    integer(8),parameter :: cls_sites =  6 !! cluster size
+    integer(8),parameter :: cls_sites =  3 !! cluster size
     integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
     integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
     integer(8),parameter :: split_sites = n_sites/n_splits
     integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
-    integer(8),parameter :: n_equil  = 2000 !! no of equilibrium steps
-    integer(8),parameter :: n_meas  = 2000 !! no of measurements
+    integer(8),parameter :: n_equil  = 0 !! no of equilibrium steps
+    integer(8),parameter :: n_meas  = 0 !! no of measurements
     integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
     integer(8),parameter :: dim_h = 6*n_sites  ! dimensionality of hamiltonian
     integer(8),parameter :: dim_clsh = 6*cls_dim ! dimensionality of cluster hamiltonian
     integer(8),parameter :: mu_cnf = 25 !! monte carlo steps to set mu
+    integer(8),parameter :: n_prcs = 3
+    integer(8),parameter :: dimar = int(split_sites/n_prcs)
     real(8),parameter :: pi = 4*atan(1.0)
     real(8),parameter :: t_hopping = 1.0
     real(8),parameter :: m_max = 2.0_8
     real(8),parameter :: m_min = 0.0_8
     real(8) :: mu  = 0.0 !! chemical potential
     real(8),parameter :: temp = 0.30  !! simulation temperature
-    real(8),parameter :: dtemp = 0.01!! temperature step to lower the temperature
+    real(8),parameter :: dtemp = 0.30!! temperature step to lower the temperature
     real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
     real(8)  :: tvar !! variable used for varying tempreature
     real(8) :: u_int = 1.0 !! interaction strength
@@ -33,6 +35,9 @@ module  varmodule
     integer(8),dimension(0:split_sites-1)::changed_ids,loc_ids
     real(8),dimension(0:dim_h-1) :: egval_fl !! eigenvalues for the full hamiltonian
     real(8),dimension(0:dim_clsh-1) :: egval !! eigenvalues for the cluster hamiltonian
+
+    !!! array to store site that keep track of sites and process
+    integer(8),dimension(0:n_prcs-1,0:dimar-1) :: task_num    
     
     !!!!!!!!!!!!!!!!!! initialize neighbour table !!!!!!!!!!!!!!!!!!!!!
     integer(8),dimension(0:n_sites-1):: right,left,up,down,right_up,left_down

@@ -8,7 +8,7 @@ use varmodule
   implicit none
   include "mpif.h"
   integer(8) :: i,j,ki,loc_si1,loc_si2,loc_si3,suc0,suc1,suc2
-  integer :: my_id,num_procs !! process id and number of processes
+  integer :: my_id,num_procs  !! process id and number of processes
   integer(8) :: site_clster,loc_proc !! local site in the cluster
   real(8) :: rnum                 !! variable used to store intermediate temperature
   real(8) :: mu_init,sum_mu=0.0,mu_avg=0.0 !! mu calculations
@@ -17,17 +17,23 @@ use varmodule
   real :: t_strt_equil, t_end_equil
   real :: t_strt_meas , t_end_meas
   real :: delT , mu_initial 
+  
+
 
   complex(8),dimension(0:dim_clsh-1,0:dim_clsh-1) :: copy_ham !! copy of cluster hamiltonian
-
+  
 !!!!!!!!!!!!!!!!!! parameters for the parallelization !!!!!!!!!!!!!!!
   integer :: ierr
   integer, dimension(MPI_STATUS_SIZE)::status
-
    call MPI_INIT(ierr)
    call MPI_COMM_SIZE(MPI_COMM_WORLD,num_procs,ierr)
    call MPI_COMM_RANK(MPI_COMM_WORLD,my_id,ierr)
-
+    
+    !print *,'tn0',task_num(0,:) 
+    !print *,'tn1',task_num(1,:) 
+    !print*,'tn2',task_num(2,:)
+    !print*,'tn3',task_num(3,:)  
+    print*,'tnm',task_num(my_id,:)
     !! calling the subroutine to initialize the neighbours
     call neighbour_table()
 
@@ -187,6 +193,9 @@ use varmodule
            
           !! loop over all the sites within each partition
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
+          task_num(:,0) = sites_array(j,:)
+          print *,task_num
+          
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
             
