@@ -121,7 +121,6 @@ class Hamiltonian(Lattice):
         return:
             None
         '''
-        print(self.n_cell,self.n_sites)
         for i in range(self.n_cell):
             
             ## sites in a given unit cell
@@ -268,7 +267,7 @@ class Interaction(Hamiltonian):
 
         
         ### number of monte carlo configurations for each temperature
-        self.nmc = data.shape[0]
+        self.nmc = int(data.shape[0]/self.n_cell)
 
         ## list to store the data from the files for sites in the unit cell
         m0, m1, m2 = [], [], []
@@ -316,10 +315,7 @@ class Interaction(Hamiltonian):
             None
         """
 
-        ## mx = m0 * cos(phi) * sin(theta)
-        ## my = m0 * sin(phi) * sin(theta)
-        ## mz = m0 * cos(theta)
-
+ 
         m_x = lambda x,y,z : x*np.cos(y) * np.sin(z)
         m_y = lambda x,y,z : x*np.sin(y) * np.sin(z)
         m_z = lambda x,y : x*np.cos(y) 
@@ -334,7 +330,7 @@ class Interaction(Hamiltonian):
             m_0 = data_loc[0] ; m_1 = data_loc[1];m_2 = data_loc[2]
             theta_0 = data_loc[3];theta_1 = data_loc[4];theta_2 = data_loc[5]
             phi_0 = data_loc[6];phi_1 = data_loc[7];phi_2 = data_loc[8]
-
+           
             m_x0 = m_x(m_0,phi_0,theta_0);m_x1 = m_x(m_1,phi_1,theta_1);m_x2 = m_x(m_2,phi_2,theta_2)
             m_y0 = m_y(m_0, phi_0, theta_0);m_y1 = m_y(m_1, phi_1, theta_1);m_y2 = m_y(m_2,phi_2,theta_2)  
             m_z0 = m_z(m_0,theta_0) ; m_z1 = m_z(m_1,theta_1) ; m_z2 = m_z(m_2,theta_2)
@@ -357,9 +353,11 @@ class Interaction(Hamiltonian):
             mat[s0n,s0] = -0.5*self.u_int*(m_x0+1j*m_y0)
             mat[s1n,s1] = -0.5*self.u_int*(m_x1+1j*m_y1)
             mat[s2n, s2] = -0.5*self.u_int*(m_x2+1j*m_y2)
-
+            
         return mat
 
+    #def __str__(self):
+    #    return f'Object for system size {self.l_cell}'
 
 
 ### this class contains the method and attribute to calculate the observables
@@ -395,7 +393,7 @@ class Observable(Lattice):
         self.be = betaE
 
     
-    def feCe(self,j):
+    def densitycalc(self,j):
         """
         This function calculates the product of fermi function and the wavefunction 
         overlap f_{e}|C|^2
@@ -409,9 +407,14 @@ class Observable(Lattice):
         psi  = self.egvec[:,j]
         psi2up = np.conjugate(psi[:self.n_sites])*psi[:self.n_sites]
         psi2dn = np.conjugate(psi[self.n_sites:])*psi[self.n_sites:]
-        self.nup = self.be[j]/(1+self.be[j])*psi2up
-        self.ndown = self.be[j+self.n_sites]/(1+self.be[j+self.n_sites])*psi2dn
+        self.nup = (self.be[j]/(1+self.be[j]))*psi2up
+        self.ndown = (self.be[j+self.n_sites]/(1+self.be[j+self.n_sites]))*psi2dn
         self.n = self.nup.sum()  + self.ndown.sum()
+
+
+### class to calculate the density of states given the hamilto
+#class DosCalc:
+
 
 
 
@@ -420,15 +423,15 @@ class Observable(Lattice):
 
 if __name__=="__main__":
 
-    obs.fermiFunc()
-    obs.feCe(1)
+    #obs.fermiFunc()
+    #obs.feCe(1)
 
-    obs.nup.sum()
-
-
+    #obs.nup.sum()
 
 
-    obs.n_sites=432
+
+
+    #obs.n_sites=432
 
 
 
@@ -454,7 +457,7 @@ if __name__=="__main__":
 
     # In[30]:
 
-
+    """
     l_cell = int(12)  # number of unit cell in x
     n_cell = int(l_cell**2)  # total number of unit cells
     s_cell = int(3)  # number of sites in the unit cell
@@ -618,6 +621,6 @@ if __name__=="__main__":
 
 
 
-
+    """
 
 # %%
